@@ -1,23 +1,23 @@
-# fly.toml app configuration file generated for campus-marketplace on 2026-03-06
+# fly.toml app configuration file generated for campus-marketplace on 2026-03-06T16:46:41Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "campus-marketplace"
-primary_region = "ams"
+app = 'campus-marketplace'
+primary_region = 'ams'
 
 [build]
-  dockerfile = "Dockerfile"
 
 [http_service]
-  internal_port = 3000
+  internal_port = 8080
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
+  processes = ['app']
 
-[[mounts]]
-  source = "campus_data"
-  destination = "/data"
-
-[env]
-  DATABASE_PATH = "/data/campus_marketplace.db"
-  NODE_ENV = "production"
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 256
