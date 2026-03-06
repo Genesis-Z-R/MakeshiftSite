@@ -28,7 +28,12 @@ const Home: React.FC = () => {
       const response = await api.get('/listings', {
         params: { search, category, sort }
       });
-      setListings(response.data);
+      if (Array.isArray(response.data)) {
+        setListings(response.data);
+      } else {
+        console.error('Expected array of listings, got:', response.data);
+        setListings([]);
+      }
     } catch (error) {
       console.error('Error fetching listings:', error);
     } finally {

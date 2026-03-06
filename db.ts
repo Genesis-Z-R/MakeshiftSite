@@ -1,7 +1,8 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 
-const db = new Database('campus_marketplace.db');
+const dbPath = process.env.DATABASE_PATH || 'campus_marketplace.db';
+const db = new Database(dbPath);
 
 // Initialize tables
 db.exec(`
