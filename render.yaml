@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: campus-marketplace
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_PATH
+        value: /data/campus_marketplace.db
+      - key: JWT_SECRET
+        generateValue: true
+    disk:
+      name: campus-data
+      mountPath: /data
+      sizeGB: 1
