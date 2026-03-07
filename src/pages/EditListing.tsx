@@ -1,19 +1,21 @@
-import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { useAccessibility } from '../context/AccessibilityContext';
-import { Package, DollarSign, List, Image as ImageIcon, AlertCircle, X, Crop, Check } from 'lucide-react';
+import { Package, DollarSign, List, Image as ImageIcon, AlertCircle, X, Crop, Check, ArrowLeft } from 'lucide-react';
 import Cropper from 'react-easy-crop';
 import getCroppedImg from '../services/cropImage';
 
-const CreateListing: React.FC = () => {
+const EditListing: React.FC = () => {
+  const { id } = useParams();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [category, setCategory] = useState('Textbooks');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   
   // Cropper state
@@ -27,6 +29,27 @@ const CreateListing: React.FC = () => {
   const navigate = useNavigate();
 
   const categories = ['Textbooks', 'Electronics', 'Furniture', 'Clothing', 'Sports', 'Books', 'Services', 'Other'];
+
+  useEffect(() => {
+    const fetchListing = async () => {
+      try {
+        const response = await api.get(`/listings/${id}`);
+        const data = response.data;
+        setTitle(data.title);
+        setDescription(data.description);
+        setPrice(data.price.toString());
+        setCategory(data.category);
+        setImagePreview(data.image_url);
+        announce(`Editing listing: ${data.title}`);
+      } catch (err) {
+        console.error(err);
+        setError('Failed to load listing data.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchListing();
+  }, [id, announce]);
 
   const onCropComplete = useCallback((_croppedArea: any, croppedAreaPixels: any) => {
     setCroppedAreaPixels(croppedAreaPixels);
@@ -49,7 +72,7 @@ const CreateListing: React.FC = () => {
     if (!rawImage || !croppedAreaPixels) return;
     
     try {
-      setLoading(true);
+      setSaving(true);
       const croppedBlob = await getCroppedImg(rawImage, croppedAreaPixels);
       if (croppedBlob) {
         const croppedFile = new File([croppedBlob], 'cropped-image.jpg', { type: 'image/jpeg' });
@@ -64,13 +87,13 @@ const CreateListing: React.FC = () => {
       console.error(e);
       setError('Failed to crop image.');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSaving(true);
     setError('');
     try {
       const formData = new FormData();
@@ -82,28 +105,38 @@ const CreateListing: React.FC = () => {
         formData.append('image', imageFile);
       }
 
-      const response = await api.post('/listings', formData, {
+      await api.put(`/listings/${id}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-      announce('Listing created successfully!');
-      navigate(`/listing/${response.data.id}`);
+      announce('Listing updated successfully!');
+      navigate(`/listing/${id}`);
     } catch (err: any) {
-      const msg = 'Failed to create listing. Please try again.';
+      const msg = 'Failed to update listing. Please try again.';
       setError(msg);
       announce(msg, 'assertive');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
+  if (loading) return <div className="max-w-3xl mx-auto px-4 py-20 text-center">Loading...</div>;
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
+      <button 
+        onClick={() => navigate(-1)} 
+        className="flex items-center text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 mb-8 font-medium transition-colors"
+      >
+        <ArrowLeft className="h-5 w-5 mr-2" />
+        Back
+      </button>
+
       <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden transition-colors duration-200">
         <header className="bg-indigo-600 px-8 py-10 text-white">
-          <h1 className="text-3xl font-bold mb-2">Create New Listing</h1>
-          <p className="text-indigo-100">Fill in the details below to post your item.</p>
+          <h1 className="text-3xl font-bold mb-2">Edit Listing</h1>
+          <p className="text-indigo-100">Update your item's details.</p>
         </header>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
@@ -127,7 +160,6 @@ const CreateListing: React.FC = () => {
                   placeholder="e.g. Calculus 101 Textbook"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  aria-describedby={error ? "form-error" : undefined}
                 />
               </div>
             </div>
@@ -145,7 +177,6 @@ const CreateListing: React.FC = () => {
                   placeholder="0.00"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
-                  aria-describedby={error ? "form-error" : undefined}
                 />
               </div>
             </div>
@@ -170,21 +201,19 @@ const CreateListing: React.FC = () => {
               <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-8 hover:border-indigo-500 dark:hover:border-indigo-400 transition-all cursor-pointer relative group">
                 {imagePreview ? (
                   <div className="relative w-full max-h-64 rounded-xl overflow-hidden">
-                    <img src={imagePreview} alt="Preview of uploaded item" className="w-full h-full object-contain" />
+                    <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
                     <button
                       type="button"
                       onClick={() => { setImageFile(null); setImagePreview(null); announce('Image removed.'); }}
                       className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full shadow-lg hover:bg-red-600 transition-all"
-                      aria-label="Remove image"
                     >
-                      <X className="h-5 w-5" aria-hidden="true" />
+                      <X className="h-5 w-5" />
                     </button>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <ImageIcon className="h-12 w-12 text-slate-400 mx-auto mb-4 group-hover:text-indigo-500 transition-all" aria-hidden="true" />
+                    <ImageIcon className="h-12 w-12 text-slate-400 mx-auto mb-4 group-hover:text-indigo-500 transition-all" />
                     <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Click to upload or drag and drop</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">PNG, JPG, GIF up to 10MB</p>
                   </div>
                 )}
                 <input
@@ -193,7 +222,6 @@ const CreateListing: React.FC = () => {
                   accept="image/*"
                   className="absolute inset-0 opacity-0 cursor-pointer"
                   onChange={handleImageChange}
-                  aria-label="Upload item image"
                 />
               </div>
             </div>
@@ -205,7 +233,7 @@ const CreateListing: React.FC = () => {
                 required
                 rows={5}
                 className="input-field p-4 resize-none"
-                placeholder="Describe your item's condition, features, etc."
+                placeholder="Describe your item..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               ></textarea>
@@ -222,10 +250,10 @@ const CreateListing: React.FC = () => {
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={saving}
               className="btn-primary flex-1 py-4 shadow-lg shadow-indigo-100 dark:shadow-none"
             >
-              {loading ? 'Posting...' : 'Post Listing'}
+              {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>
@@ -269,7 +297,6 @@ const CreateListing: React.FC = () => {
                   min={1}
                   max={3}
                   step={0.1}
-                  aria-labelledby="Zoom"
                   onChange={(e) => setZoom(Number(e.target.value))}
                   className="flex-grow h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                 />
@@ -283,10 +310,10 @@ const CreateListing: React.FC = () => {
                 </button>
                 <button
                   onClick={handleCropConfirm}
-                  disabled={loading}
+                  disabled={saving}
                   className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 dark:shadow-none"
                 >
-                  {loading ? (
+                  {saving ? (
                     <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   ) : (
                     <>
@@ -304,4 +331,4 @@ const CreateListing: React.FC = () => {
   );
 };
 
-export default CreateListing;
+export default EditListing;

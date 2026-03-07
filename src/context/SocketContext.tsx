@@ -4,16 +4,18 @@ import { useAuth } from './AuthContext';
 
 interface SocketContextType {
   socket: Socket | null;
-  onlineCount: number;
+  onlineUsers: number[];
   notifications: number;
   clearNotifications: () => void;
+  typingUsers: Map<string, boolean>; // key: "userId_listingId"
 }
 
 const SocketContext = createContext<SocketContextType>({ 
   socket: null, 
-  onlineCount: 0, 
+  onlineUsers: [], 
   notifications: 0,
-  clearNotifications: () => {}
+  clearNotifications: () => {},
+  typingUsers: new Map()
 });
 
 export const useSocket = () => useContext(SocketContext);
@@ -21,20 +23,35 @@ export const useSocket = () => useContext(SocketContext);
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [onlineCount, setOnlineCount] = useState(0);
+  const [onlineUsers, setOnlineUsers] = useState<number[]>([]);
   const [notifications, setNotifications] = useState(0);
+  const [typingUsers, setTypingUsers] = useState<Map<string, boolean>>(new Map());
 
   useEffect(() => {
     const newSocket = io();
     setSocket(newSocket);
 
-    newSocket.on('online_count', (count: number) => {
-      setOnlineCount(count);
+    newSocket.on('online_users', (users: number[]) => {
+      setOnlineUsers(users);
+    });
+
+    newSocket.on('user_typing', (data: { sender_id: number; listing_id: number }) => {
+      setTypingUsers(prev => {
+        const next = new Map(prev);
+        next.set(`${data.sender_id}_${data.listing_id}`, true);
+        return next;
+      });
+    });
+
+    newSocket.on('user_stop_typing', (data: { sender_id: number; listing_id: number }) => {
+      setTypingUsers(prev => {
+        const next = new Map(prev);
+        next.delete(`${data.sender_id}_${data.listing_id}`);
+        return next;
+      });
     });
 
     newSocket.on('new_message', () => {
-      // Increment notification count if user is not on messages page
-      // We'll handle the "is on messages page" check in the component or just increment here
       setNotifications(prev => prev + 1);
     });
 
@@ -48,11 +65,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     if (socket && user) {
       socket.emit('authenticate', user.id);
+      
+      // Re-authenticate on reconnect
+      socket.on('connect', () => {
+        socket.emit('authenticate', user.id);
+      });
     }
   }, [socket, user]);
 
   return (
-    <SocketContext.Provider value={{ socket, onlineCount, notifications, clearNotifications }}>
+    <SocketContext.Provider value={{ socket, onlineUsers, notifications, clearNotifications, typingUsers }}>
       {children}
     </SocketContext.Provider>
   );
