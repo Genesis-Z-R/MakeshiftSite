@@ -48,4 +48,4 @@ If you have connected your GitHub repository to Fly.io:
 
 *   **Dockerfile:** Handles the multi-stage build of the React frontend and the Express backend.
 *   **fly.toml:** Configures the HTTP service and mounts the `campus_data` volume to `/data`.
-*   **Database:** The database file is stored at `/data/campus_marketplace.db` inside the container, ensuring it survives redeploys.
+*   **Database:** The application uses PostgreSQL. Ensure the `DATABASE_URL` environment variable is set in your production environment.

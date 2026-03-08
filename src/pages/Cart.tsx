@@ -75,9 +75,9 @@ const Cart: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         {/* Cart Items */}
         <section className="lg:col-span-2 space-y-6" aria-label="Items in your cart">
-          {cart.map((item) => (
+          {cart.map((item, idx) => (
             <div
-              key={item.id}
+              key={`cart-item-${item.id}-${idx}`}
               className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex gap-6 group hover:shadow-md transition-all duration-200"
             >
               <div className="h-32 w-32 rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-800 flex-shrink-0">

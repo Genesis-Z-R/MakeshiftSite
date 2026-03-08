@@ -20,6 +20,7 @@ interface ListingDetail {
   seller_name: string;
   seller_email: string;
   status: string;
+  sold_count: number;
   created_at: string;
 }
 
@@ -159,23 +160,37 @@ const ListingDetail: React.FC = () => {
         <div className="flex flex-col">
           <div className="flex justify-between items-start mb-4">
             <div>
-              <span className="inline-block bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full text-sm font-bold mb-4 uppercase tracking-wider">
+              <Link 
+                to={`/?category=${listing.category}`}
+                className="inline-block bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-3 py-1 rounded-full text-sm font-bold mb-4 uppercase tracking-wider hover:bg-indigo-600 hover:text-white transition-colors"
+              >
                 {listing.category}
-              </span>
+              </Link>
               <h1 className="text-4xl font-extrabold text-slate-900 dark:text-slate-50 tracking-tight">{listing.title}</h1>
             </div>
             <div className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">${listing.price}</div>
           </div>
 
           <div className="flex items-center gap-6 mb-8 text-sm text-slate-500 dark:text-slate-400">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-indigo-500" aria-hidden="true" />
-              <span className="font-semibold text-slate-700 dark:text-slate-300">{listing.seller_name}</span>
-            </div>
+            <Link 
+              to={`/seller/${listing.seller_id}`}
+              className="flex items-center gap-2 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group"
+            >
+              <User className="h-4 w-4 text-indigo-500 group-hover:text-indigo-600" aria-hidden="true" />
+              <span className="font-semibold text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 underline underline-offset-4 decoration-slate-200 dark:decoration-slate-700 group-hover:decoration-indigo-500 transition-all">
+                {listing.seller_name}
+              </span>
+            </Link>
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4" aria-hidden="true" />
               <span>{new Date(listing.created_at).toLocaleDateString()}</span>
             </div>
+            {listing.sold_count > 0 && (
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold">
+                <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                <span>{listing.sold_count} sold</span>
+              </div>
+            )}
           </div>
 
           <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm mb-8">

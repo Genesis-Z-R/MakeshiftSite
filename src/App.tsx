@@ -5,12 +5,14 @@ import { CartProvider } from './context/CartContext';
 import { SocketProvider } from './context/SocketContext';
 import { AccessibilityProvider } from './context/AccessibilityContext';
 import Navbar from './components/Navbar';
+import FloatingCart from './components/FloatingCart';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ListingDetail from './pages/ListingDetail';
 import CreateListing from './pages/CreateListing';
 import EditListing from './pages/EditListing';
+import SellerProfile from './pages/SellerProfile';
 import Messages from './pages/Messages';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
@@ -42,42 +44,44 @@ export default function App() {
                 <Navbar />
                 <main id="main-content" tabIndex={-1}>
                   <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
-                  <Route path="/listing/:id" element={<ListingDetail />} />
-                  <Route path="/cart" element={
-                    <PrivateRoute>
-                      <Cart />
-                    </PrivateRoute>
-                  } />
-                  <Route path="/create-listing" element={
-                  <PrivateRoute>
-                    <CreateListing />
-                  </PrivateRoute>
-                } />
-                <Route path="/edit-listing/:id" element={
-                  <PrivateRoute>
-                    <EditListing />
-                  </PrivateRoute>
-                } />
-                <Route path="/messages" element={
-                  <PrivateRoute>
-                    <Messages />
-                  </PrivateRoute>
-                } />
-                <Route path="/profile" element={
-                  <PrivateRoute>
-                    <Profile />
-                  </PrivateRoute>
-                } />
-                <Route path="/admin" element={
-                  <AdminRoute>
-                    <Admin />
-                  </AdminRoute>
-                } />
-              </Routes>
-            </main>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="/listing/:id" element={<ListingDetail />} />
+                    <Route path="/seller/:id" element={<SellerProfile />} />
+                    <Route path="/cart" element={
+                      <PrivateRoute>
+                        <Cart />
+                      </PrivateRoute>
+                    } />
+                    <Route path="/create-listing" element={
+                      <PrivateRoute>
+                        <CreateListing />
+                      </PrivateRoute>
+                    } />
+                    <Route path="/edit-listing/:id" element={
+                      <PrivateRoute>
+                        <EditListing />
+                      </PrivateRoute>
+                    } />
+                    <Route path="/messages" element={
+                      <PrivateRoute>
+                        <Messages />
+                      </PrivateRoute>
+                    } />
+                    <Route path="/profile" element={
+                      <PrivateRoute>
+                        <Profile />
+                      </PrivateRoute>
+                    } />
+                    <Route path="/admin" element={
+                      <AdminRoute>
+                        <Admin />
+                      </AdminRoute>
+                    } />
+                  </Routes>
+                </main>
+                <FloatingCart />
             
             <footer className="bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 py-12 mt-20 transition-colors duration-200">
               <div className="max-w-7xl mx-auto px-4 text-center">

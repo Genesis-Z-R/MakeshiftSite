@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import db from './db';
+import pool from './db';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -125,21 +125,25 @@ async function startServer() {
   });
 
   // --- Seed Data ---
-  const seedData = () => {
+  const seedData = async () => {
+    console.log('Checking if database needs seeding...');
     try {
-      const userCount: any = db.prepare('SELECT COUNT(*) as count FROM users').get();
-      const listingCount: any = db.prepare('SELECT COUNT(*) as count FROM listings').get();
+      const userCountRes = await pool.query('SELECT COUNT(*) as count FROM users');
+      const listingCountRes = await pool.query('SELECT COUNT(*) as count FROM listings');
       
-      if (userCount.count === 0 || listingCount.count === 0) {
+      const userCount = parseInt(userCountRes.rows[0].count);
+      const listingCount = parseInt(listingCountRes.rows[0].count);
+      
+      if (userCount === 0 || listingCount === 0) {
         console.log('Seeding database...');
-        if (userCount.count === 0) {
+        if (userCount === 0) {
           const hashedPassword = bcrypt.hashSync('password123', 10);
-          db.prepare('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)').run(
+          await pool.query('INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)', [
             'Admin User', 'admin@campus.edu', hashedPassword, 'admin'
-          );
-          db.prepare('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)').run(
+          ]);
+          await pool.query('INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)', [
             'Jane Student', 'jane@campus.edu', hashedPassword, 'student'
-          );
+          ]);
         }
 
         const listings = [
@@ -165,12 +169,12 @@ async function startServer() {
           ['Study Table', 'Compact, white finish.', 50.00, 'Furniture', 'https://picsum.photos/seed/table/400/400']
         ];
 
-        if (listingCount.count === 0) {
-          listings.forEach(([title, desc, price, cat, img]) => {
-            db.prepare('INSERT INTO listings (seller_id, title, description, price, category, image_url) VALUES (1, ?, ?, ?, ?, ?)').run(
+        if (listingCount === 0) {
+          for (const [title, desc, price, cat, img] of listings) {
+            await pool.query('INSERT INTO listings (seller_id, title, description, price, category, image_url) VALUES (1, $1, $2, $3, $4, $5)', [
               title, desc, price, cat, img
-            );
-          });
+            ]);
+          }
         }
         console.log('Database seeded successfully.');
       }
@@ -178,7 +182,7 @@ async function startServer() {
       console.error('Seeding error:', err);
     }
   };
-  seedData();
+  await seedData();
 
   app.use(express.json());
   app.use('/uploads', express.static(UPLOADS_DIR));
@@ -204,17 +208,23 @@ async function startServer() {
   app.post('/api/auth/register', async (req, res) => {
     const { name, email, password, adminPassword } = req.body;
     try {
-      const userCount: any = db.prepare('SELECT COUNT(*) as count FROM users').get();
+      const userCountRes = await pool.query('SELECT COUNT(*) as count FROM users');
+      const userCount = parseInt(userCountRes.rows[0].count);
+      
       let role = 'student';
       if (adminPassword === 'Genesis@6112') {
         role = 'admin';
-      } else if (userCount.count === 0) {
+      } else if (userCount === 0) {
         role = 'admin';
       }
       const hashedPassword = await bcrypt.hash(password, 10);
-      const info = db.prepare('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)').run(name, email, hashedPassword, role);
-      const token = jwt.sign({ id: info.lastInsertRowid, email, role }, JWT_SECRET);
-      res.json({ token, user: { id: info.lastInsertRowid, name, email, role } });
+      const result = await pool.query(
+        'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id',
+        [name, email, hashedPassword, role]
+      );
+      const newUser = result.rows[0];
+      const token = jwt.sign({ id: newUser.id, email, role }, JWT_SECRET);
+      res.json({ token, user: { id: newUser.id, name, email, role } });
     } catch (err: any) {
       res.status(400).json({ error: 'Email already exists or invalid data' });
     }
@@ -222,7 +232,9 @@ async function startServer() {
 
   app.post('/api/auth/login', async (req, res) => {
     const { email, password } = req.body;
-    const user: any = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = result.rows[0];
+    
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -278,19 +290,24 @@ async function startServer() {
       const googleUser = googleUserResponse.data;
 
       // Check if user exists in DB
-      let user: any = db.prepare('SELECT * FROM users WHERE email = ?').get(googleUser.email);
+      const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [googleUser.email]);
+      let user = userResult.rows[0];
 
       if (!user) {
         // Create new user
-        const userCount: any = db.prepare('SELECT COUNT(*) as count FROM users').get();
-        const role = userCount.count === 0 ? 'admin' : 'student';
-        const info = db.prepare('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)').run(
-          googleUser.name,
-          googleUser.email,
-          bcrypt.hashSync(Math.random().toString(36), 10), // Random password for OAuth users
-          role
+        const userCountRes = await pool.query('SELECT COUNT(*) as count FROM users');
+        const userCount = parseInt(userCountRes.rows[0].count);
+        const role = userCount === 0 ? 'admin' : 'student';
+        const insertResult = await pool.query(
+          'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id',
+          [
+            googleUser.name,
+            googleUser.email,
+            bcrypt.hashSync(Math.random().toString(36), 10), // Random password for OAuth users
+            role
+          ]
         );
-        user = { id: info.lastInsertRowid, name: googleUser.name, email: googleUser.email, role };
+        user = { id: insertResult.rows[0].id, name: googleUser.name, email: googleUser.email, role };
       }
 
       const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET);
@@ -334,222 +351,348 @@ async function startServer() {
   };
 
   // --- Listing Routes ---
-  app.get('/api/listings', (req, res) => {
-    const { search, category, sort, limit = 12, offset = 0 } = req.query;
-    let query = "SELECT listings.*, users.name as seller_name FROM listings JOIN users ON listings.seller_id = users.id WHERE status = 'available'";
+  app.get('/api/listings', async (req, res) => {
+    const { search, category, sort, limit = 12, offset = 0, seller_id } = req.query;
+    
+    // If seller_id is provided, we show all their items (available and sold)
+    // Otherwise, we only show available items for the general marketplace
+    let query = "SELECT listings.*, users.name as seller_name FROM listings JOIN users ON listings.seller_id = users.id";
     const params: any[] = [];
+    let paramIndex = 1;
+
+    if (seller_id) {
+      query += ` WHERE seller_id = $${paramIndex}`;
+      params.push(seller_id);
+      paramIndex++;
+    } else {
+      query += " WHERE status = 'available'";
+    }
 
     if (search) {
-      query += ' AND (title LIKE ? OR description LIKE ?)';
+      query += ` AND (title ILIKE $${paramIndex} OR description ILIKE $${paramIndex + 1})`;
       params.push(`%${search}%`, `%${search}%`);
+      paramIndex += 2;
     }
     if (category && category !== 'All') {
-      query += ' AND category = ?';
+      query += ` AND category = $${paramIndex}`;
       params.push(category);
+      paramIndex++;
     }
 
     if (sort === 'price_low') query += ' ORDER BY price ASC';
     else if (sort === 'price_high') query += ' ORDER BY price DESC';
     else query += ' ORDER BY created_at DESC';
 
-    query += ' LIMIT ? OFFSET ?';
+    query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     params.push(Number(limit), Number(offset));
 
-    const listings = db.prepare(query).all(...params);
-    res.json(listings);
+    try {
+      const result = await pool.query(query, params);
+      res.json(result.rows);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch listings' });
+    }
   });
 
-  app.get('/api/listings/:id', (req, res) => {
-    const listing = db.prepare('SELECT listings.*, users.name as seller_name, users.email as seller_email FROM listings JOIN users ON listings.seller_id = users.id WHERE listings.id = ?').get(req.params.id);
-    if (!listing) return res.status(404).json({ error: 'Listing not found' });
-    res.json(listing);
+  app.get('/api/listings/:id', async (req, res) => {
+    try {
+      const result = await pool.query(
+        'SELECT listings.*, users.name as seller_name, users.email as seller_email FROM listings JOIN users ON listings.seller_id = users.id WHERE listings.id = $1',
+        [req.params.id]
+      );
+      const listing = result.rows[0];
+      if (!listing) return res.status(404).json({ error: 'Listing not found' });
+      res.json(listing);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch listing' });
+    }
   });
 
-  app.post('/api/listings', authenticate, upload.single('image'), (req: any, res) => {
+  app.post('/api/listings', authenticate, upload.single('image'), async (req: any, res) => {
     const { title, description, price, category } = req.body;
     const image_url = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
-    const info = db.prepare('INSERT INTO listings (seller_id, title, description, price, category, image_url) VALUES (?, ?, ?, ?, ?, ?)').run(req.user.id, title, description, price, category, image_url);
-    res.json({ id: info.lastInsertRowid });
+    try {
+      const result = await pool.query(
+        'INSERT INTO listings (seller_id, title, description, price, category, image_url) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+        [req.user.id, title, description, price, category, image_url]
+      );
+      res.json({ id: result.rows[0].id });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to create listing' });
+    }
   });
 
-  app.put('/api/listings/:id', authenticate, upload.single('image'), (req: any, res) => {
+  app.put('/api/listings/:id', authenticate, upload.single('image'), async (req: any, res) => {
     const { title, description, price, category, status } = req.body;
-    const listing: any = db.prepare('SELECT * FROM listings WHERE id = ?').get(req.params.id);
-    if (!listing || listing.seller_id !== req.user.id) return res.status(403).json({ error: 'Unauthorized' });
+    try {
+      const listingResult = await pool.query('SELECT * FROM listings WHERE id = $1', [req.params.id]);
+      const listing = listingResult.rows[0];
+      
+      if (!listing || listing.seller_id !== req.user.id) return res.status(403).json({ error: 'Unauthorized' });
 
-    const image_url = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
+      const image_url = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
 
-    db.prepare('UPDATE listings SET title = ?, description = ?, price = ?, category = ?, image_url = ?, status = ? WHERE id = ?')
-      .run(title, description, price, category, image_url, status, req.params.id);
-    res.json({ success: true });
+      await pool.query(
+        'UPDATE listings SET title = $1, description = $2, price = $3, category = $4, image_url = $5, status = $6 WHERE id = $7',
+        [title, description, price, category, image_url, status, req.params.id]
+      );
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to update listing' });
+    }
   });
 
-  app.delete('/api/listings/:id', authenticate, (req: any, res) => {
-    const listing: any = db.prepare('SELECT * FROM listings WHERE id = ?').get(req.params.id);
-    if (!listing) return res.status(404).json({ error: 'Not found' });
-    if (listing.seller_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
+  app.delete('/api/listings/:id', authenticate, async (req: any, res) => {
+    try {
+      const listingResult = await pool.query('SELECT * FROM listings WHERE id = $1', [req.params.id]);
+      const listing = listingResult.rows[0];
+      
+      if (!listing) return res.status(404).json({ error: 'Not found' });
+      if (listing.seller_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
 
-    db.prepare('DELETE FROM listings WHERE id = ?').run(req.params.id);
-    res.json({ success: true });
+      await pool.query('DELETE FROM listings WHERE id = $1', [req.params.id]);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to delete listing' });
+    }
+  });
+
+  // --- User Routes ---
+  app.get('/api/users/:id', async (req, res) => {
+    try {
+      const result = await pool.query('SELECT id, name, email, role, created_at FROM users WHERE id = $1', [req.params.id]);
+      const user = result.rows[0];
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      res.json(user);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch user' });
+    }
   });
 
   // --- Message Routes ---
-  app.post('/api/messages', authenticate, (req: any, res) => {
+  app.post('/api/messages', authenticate, async (req: any, res) => {
     const { receiver_id, listing_id, content } = req.body;
-    db.prepare('INSERT INTO messages (sender_id, receiver_id, listing_id, content) VALUES (?, ?, ?, ?)').run(req.user.id, receiver_id, listing_id, content);
-    res.json({ success: true });
+    try {
+      await pool.query(
+        'INSERT INTO messages (sender_id, receiver_id, listing_id, content) VALUES ($1, $2, $3, $4)',
+        [req.user.id, receiver_id, listing_id, content]
+      );
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to send message' });
+    }
   });
 
-  app.get('/api/messages', authenticate, (req: any, res) => {
-    const messages = db.prepare(`
-      SELECT messages.*, u1.name as sender_name, u2.name as receiver_name, listings.title as listing_title
-      FROM messages
-      JOIN users u1 ON messages.sender_id = u1.id
-      JOIN users u2 ON messages.receiver_id = u2.id
-      JOIN listings ON messages.listing_id = listings.id
-      WHERE sender_id = ? OR receiver_id = ?
-      ORDER BY created_at DESC
-    `).all(req.user.id, req.user.id);
-    res.json(messages);
+  app.get('/api/messages', authenticate, async (req: any, res) => {
+    try {
+      const result = await pool.query(`
+        SELECT messages.*, u1.name as sender_name, u2.name as receiver_name, listings.title as listing_title
+        FROM messages
+        JOIN users u1 ON messages.sender_id = u1.id
+        JOIN users u2 ON messages.receiver_id = u2.id
+        JOIN listings ON messages.listing_id = listings.id
+        WHERE sender_id = $1 OR receiver_id = $1
+        ORDER BY created_at DESC
+      `, [req.user.id]);
+      res.json(result.rows);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch messages' });
+    }
   });
 
   // --- Admin Routes ---
-  app.get('/api/admin/users', authenticate, (req: any, res) => {
+  app.get('/api/admin/users', authenticate, async (req: any, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-    const users = db.prepare('SELECT id, name, email, role, created_at FROM users').all();
-    res.json(users);
+    try {
+      const result = await pool.query('SELECT id, name, email, role, created_at FROM users');
+      res.json(result.rows);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch users' });
+    }
   });
 
-  app.delete('/api/admin/users/:id', authenticate, (req: any, res) => {
+  app.delete('/api/admin/users/:id', authenticate, async (req: any, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-    db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
-    res.json({ success: true });
+    try {
+      await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to delete user' });
+    }
   });
 
-  app.get('/api/admin/stats', authenticate, (req: any, res) => {
+  app.get('/api/admin/stats', authenticate, async (req: any, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     
-    const totalUsers: any = db.prepare('SELECT COUNT(*) as count FROM users').get();
-    const totalListings: any = db.prepare('SELECT COUNT(*) as count FROM listings').get();
-    const totalMessages: any = db.prepare('SELECT COUNT(*) as count FROM messages').get();
-    const totalTransactions: any = db.prepare('SELECT COUNT(*) as count FROM transactions').get();
-    const totalReports: any = db.prepare("SELECT COUNT(*) as count FROM reports WHERE status = 'pending'").get();
+    try {
+      const totalUsersRes = await pool.query('SELECT COUNT(*) as count FROM users');
+      const totalListingsRes = await pool.query('SELECT COUNT(*) as count FROM listings');
+      const totalMessagesRes = await pool.query('SELECT COUNT(*) as count FROM messages');
+      const totalTransactionsRes = await pool.query('SELECT COUNT(*) as count FROM transactions');
+      const totalReportsRes = await pool.query("SELECT COUNT(*) as count FROM reports WHERE status = 'pending'");
 
-    res.json({
-      totalUsers: totalUsers.count,
-      totalListings: totalListings.count,
-      totalMessages: totalMessages.count,
-      totalTransactions: totalTransactions.count,
-      totalReports: totalReports.count,
-      onlineUsers: userSockets.size,
-      recentErrors: systemErrors.slice(0, 10)
-    });
+      res.json({
+        totalUsers: parseInt(totalUsersRes.rows[0].count),
+        totalListings: parseInt(totalListingsRes.rows[0].count),
+        totalMessages: parseInt(totalMessagesRes.rows[0].count),
+        totalTransactions: parseInt(totalTransactionsRes.rows[0].count),
+        totalReports: parseInt(totalReportsRes.rows[0].count),
+        onlineUsers: userSockets.size,
+        recentErrors: systemErrors.slice(0, 10)
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch stats' });
+    }
   });
 
   // --- Reporting & Warning Routes ---
-  app.post('/api/reports', authenticate, (req: any, res) => {
+  app.post('/api/reports', authenticate, async (req: any, res) => {
     const { reported_id, reason } = req.body;
-    db.prepare('INSERT INTO reports (reporter_id, reported_id, reason) VALUES (?, ?, ?)').run(req.user.id, reported_id, reason);
-    res.json({ success: true });
+    try {
+      await pool.query(
+        'INSERT INTO reports (reporter_id, reported_id, reason) VALUES ($1, $2, $3)',
+        [req.user.id, reported_id, reason]
+      );
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to submit report' });
+    }
   });
 
-  app.get('/api/admin/reports', authenticate, (req: any, res) => {
+  app.get('/api/admin/reports', authenticate, async (req: any, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-    const reports = db.prepare(`
-      SELECT reports.*, u1.name as reporter_name, u2.name as reported_name 
-      FROM reports 
-      JOIN users u1 ON reports.reporter_id = u1.id 
-      JOIN users u2 ON reports.reported_id = u2.id 
-      ORDER BY created_at DESC
-    `).all();
-    res.json(reports);
+    try {
+      const result = await pool.query(`
+        SELECT reports.*, u1.name as reporter_name, u2.name as reported_name 
+        FROM reports 
+        JOIN users u1 ON reports.reporter_id = u1.id 
+        JOIN users u2 ON reports.reported_id = u2.id 
+        ORDER BY created_at DESC
+      `);
+      res.json(result.rows);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch reports' });
+    }
   });
 
-  app.post('/api/admin/reports/:id/resolve', authenticate, (req: any, res) => {
+  app.post('/api/admin/reports/:id/resolve', authenticate, async (req: any, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-    db.prepare("UPDATE reports SET status = 'resolved' WHERE id = ?").run(req.params.id);
-    res.json({ success: true });
+    try {
+      await pool.query("UPDATE reports SET status = 'resolved' WHERE id = $1", [req.params.id]);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to resolve report' });
+    }
   });
 
-  app.post('/api/admin/warnings', authenticate, (req: any, res) => {
+  app.post('/api/admin/warnings', authenticate, async (req: any, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
     const { user_id, message } = req.body;
-    db.prepare('INSERT INTO warnings (user_id, admin_id, message) VALUES (?, ?, ?)').run(user_id, req.user.id, message);
-    res.json({ success: true });
+    try {
+      await pool.query(
+        'INSERT INTO warnings (user_id, admin_id, message) VALUES ($1, $2, $3)',
+        [user_id, req.user.id, message]
+      );
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to issue warning' });
+    }
   });
 
-  app.get('/api/warnings', authenticate, (req: any, res) => {
-    const warnings = db.prepare('SELECT * FROM warnings WHERE user_id = ? ORDER BY created_at DESC').all(req.user.id);
-    res.json(warnings);
+  app.get('/api/warnings', authenticate, async (req: any, res) => {
+    try {
+      const result = await pool.query('SELECT * FROM warnings WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
+      res.json(result.rows);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch warnings' });
+    }
   });
 
   // --- Cart Routes ---
-  app.get('/api/cart', authenticate, (req: any, res) => {
-    const items = db.prepare(`
-      SELECT cart_items.*, listings.title, listings.price, listings.image_url, listings.status
-      FROM cart_items
-      JOIN listings ON cart_items.listing_id = listings.id
-      WHERE cart_items.user_id = ?
-    `).all(req.user.id);
-    res.json(items);
+  app.get('/api/cart', authenticate, async (req: any, res) => {
+    try {
+      const result = await pool.query(`
+        SELECT cart_items.*, listings.title, listings.price, listings.image_url, listings.status
+        FROM cart_items
+        JOIN listings ON cart_items.listing_id = listings.id
+        WHERE cart_items.user_id = $1
+      `, [req.user.id]);
+      res.json(result.rows);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch cart' });
+    }
   });
 
-  app.get('/api/transactions', authenticate, (req: any, res) => {
-    const transactions = db.prepare(`
-      SELECT transactions.*, listings.title, listings.image_url
-      FROM transactions
-      JOIN listings ON transactions.listing_id = listings.id
-      WHERE transactions.buyer_id = ?
-      ORDER BY transactions.created_at DESC
-    `).all(req.user.id);
-    res.json(transactions);
+  app.get('/api/transactions', authenticate, async (req: any, res) => {
+    try {
+      const result = await pool.query(`
+        SELECT transactions.*, listings.title, listings.image_url
+        FROM transactions
+        JOIN listings ON transactions.listing_id = listings.id
+        WHERE transactions.buyer_id = $1
+        ORDER BY transactions.created_at DESC
+      `, [req.user.id]);
+      res.json(result.rows);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch transactions' });
+    }
   });
 
-  app.post('/api/cart', authenticate, (req: any, res) => {
+  app.post('/api/cart', authenticate, async (req: any, res) => {
     const { listing_id } = req.body;
     try {
-      db.prepare('INSERT INTO cart_items (user_id, listing_id) VALUES (?, ?)').run(req.user.id, listing_id);
+      await pool.query('INSERT INTO cart_items (user_id, listing_id) VALUES ($1, $2)', [req.user.id, listing_id]);
       res.json({ success: true });
     } catch (err) {
       res.status(400).json({ error: 'Item already in cart' });
     }
   });
 
-  app.delete('/api/cart/:id', authenticate, (req: any, res) => {
-    db.prepare('DELETE FROM cart_items WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
-    res.json({ success: true });
+  app.delete('/api/cart/:id', authenticate, async (req: any, res) => {
+    try {
+      await pool.query('DELETE FROM cart_items WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to remove from cart' });
+    }
   });
 
   // --- Checkout Route ---
-  app.post('/api/checkout', authenticate, (req: any, res) => {
-    const cartItems: any[] = db.prepare(`
-      SELECT cart_items.*, listings.price, listings.status
-      FROM cart_items
-      JOIN listings ON cart_items.listing_id = listings.id
-      WHERE cart_items.user_id = ?
-    `).all(req.user.id);
+  app.post('/api/checkout', authenticate, async (req: any, res) => {
+    const client = await pool.connect();
+    try {
+      const cartItemsResult = await client.query(`
+        SELECT cart_items.*, listings.price, listings.status
+        FROM cart_items
+        JOIN listings ON cart_items.listing_id = listings.id
+        WHERE cart_items.user_id = $1
+      `, [req.user.id]);
 
-    if (cartItems.length === 0) return res.status(400).json({ error: 'Cart is empty' });
+      const cartItems = cartItemsResult.rows;
 
-    const transaction = db.transaction(() => {
+      if (cartItems.length === 0) return res.status(400).json({ error: 'Cart is empty' });
+
+      await client.query('BEGIN');
+      
       for (const item of cartItems) {
         if (item.status !== 'available') {
           throw new Error(`Item ${item.listing_id} is no longer available`);
         }
         // Create transaction
-        db.prepare('INSERT INTO transactions (buyer_id, listing_id, amount) VALUES (?, ?, ?)').run(req.user.id, item.listing_id, item.price);
-        // Mark listing as sold
-        db.prepare("UPDATE listings SET status = 'sold' WHERE id = ?").run(item.listing_id);
+        await client.query('INSERT INTO transactions (buyer_id, listing_id, amount) VALUES ($1, $2, $3)', [req.user.id, item.listing_id, item.price]);
+        // Increment sold count
+        await client.query("UPDATE listings SET sold_count = sold_count + 1 WHERE id = $1", [item.listing_id]);
       }
       // Clear cart
-      db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(req.user.id);
-    });
-
-    try {
-      transaction();
+      await client.query('DELETE FROM cart_items WHERE user_id = $1', [req.user.id]);
+      
+      await client.query('COMMIT');
       res.json({ success: true });
     } catch (err: any) {
+      await client.query('ROLLBACK');
       res.status(400).json({ error: err.message });
+    } finally {
+      client.release();
     }
   });
 

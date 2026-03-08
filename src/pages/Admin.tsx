@@ -242,8 +242,8 @@ const Admin: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {users.map((user) => (
-                    <tr key={user.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                  {users.map((user, idx) => (
+                    <tr key={`user-${user.id}-${idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="px-8 py-4">
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 bg-indigo-100 dark:bg-indigo-900/40 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
@@ -313,8 +313,8 @@ const Admin: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {reports.length > 0 ? reports.map((report) => (
-                    <tr key={report.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                  {reports.length > 0 ? reports.map((report, idx) => (
+                    <tr key={`report-${report.id}-${idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="px-8 py-4 text-sm font-medium text-slate-900 dark:text-slate-50">{report.reporter_name}</td>
                       <td className="px-8 py-4 text-sm font-medium text-slate-900 dark:text-slate-50">{report.reported_name}</td>
                       <td className="px-8 py-4 text-sm text-slate-500 dark:text-slate-400">{report.reason}</td>
@@ -365,7 +365,7 @@ const Admin: React.FC = () => {
               {stats?.recentErrors && stats.recentErrors.length > 0 ? (
                 <div className="space-y-4">
                   {stats.recentErrors.map((error, idx) => (
-                    <div key={idx} className="p-4 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/20">
+                    <div key={`error-${idx}`} className="p-4 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/20">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">Error</span>
                         <span className="text-[10px] text-red-400 dark:text-red-500 flex items-center gap-1">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
-import { MessageSquare, User, Package, Clock, Send, Search, Flag, AlertTriangle } from 'lucide-react';
+import { MessageSquare, User, Package, Clock, Send, Search, Flag, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { useAccessibility } from '../context/AccessibilityContext';
@@ -292,18 +292,21 @@ const Messages: React.FC = () => {
   if (loading) return <div className="max-w-6xl mx-auto px-4 py-20 text-center text-slate-900 dark:text-slate-50" role="status">Loading conversations...</div>;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 h-[calc(100vh-120px)] flex flex-col">
-      <header className="flex items-center justify-between mb-6">
+    <div className="max-w-6xl mx-auto px-0 sm:px-4 py-0 sm:py-8 h-[calc(100vh-64px)] sm:h-[calc(100vh-120px)] flex flex-col">
+      <header className="hidden sm:flex items-center justify-between mb-6">
         <h1 className="text-2xl font-black text-slate-900 dark:text-slate-50 flex items-center gap-3">
           <MessageSquare className="h-7 w-7 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
           Messages
         </h1>
       </header>
 
-      <div className="flex-grow flex bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-xl overflow-hidden transition-colors duration-200">
-        {/* Sidebar */}
-        <aside className="w-1/3 border-r border-slate-100 dark:border-slate-800 flex flex-col bg-slate-50/30 dark:bg-slate-900/50">
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800">
+      <div className="flex-grow flex bg-white dark:bg-slate-900 sm:rounded-3xl sm:border border-slate-100 dark:border-slate-800 sm:shadow-xl overflow-hidden transition-colors duration-200 relative">
+        {/* Sidebar - Hidden on mobile when a conversation is selected */}
+        <aside className={`${selectedConv ? 'hidden md:flex' : 'flex'} w-full md:w-1/3 border-r border-slate-100 dark:border-slate-800 flex-col bg-slate-50/30 dark:bg-slate-900/50`}>
+          <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 md:bg-transparent">
+            <div className="flex items-center justify-between mb-4 md:hidden">
+              <h1 className="text-xl font-black text-slate-900 dark:text-slate-50">Messages</h1>
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" aria-hidden="true" />
               <label htmlFor="chat-search" className="sr-only">Search chats</label>
@@ -354,13 +357,20 @@ const Messages: React.FC = () => {
           </nav>
         </aside>
 
-        {/* Chat Area */}
-        <main className="flex-grow flex flex-col bg-white dark:bg-slate-900" aria-label="Chat window">
+        {/* Chat Area - Full screen on mobile when a conversation is selected */}
+        <main className={`${selectedConv ? 'flex' : 'hidden md:flex'} flex-grow flex flex-col bg-white dark:bg-slate-900`} aria-label="Chat window">
           {selectedConv ? (
             <>
               {/* Chat Header */}
               <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900">
                 <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setSelectedConv(null)}
+                    className="md:hidden p-2 -ml-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                    aria-label="Back to conversations"
+                  >
+                    <ArrowLeft className="h-6 w-6" />
+                  </button>
                   <div className="h-10 w-10 bg-indigo-600 dark:bg-indigo-500 rounded-xl flex items-center justify-center text-white font-bold relative">
                     {selectedConv.other_user_name.charAt(0)}
                     {isOtherUserOnline(selectedConv.other_user_id) && (
@@ -369,16 +379,16 @@ const Messages: React.FC = () => {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h2 className="font-bold text-slate-900 dark:text-slate-50">{selectedConv.other_user_name}</h2>
+                      <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm sm:text-base">{selectedConv.other_user_name}</h2>
                       {isOtherUserOnline(selectedConv.other_user_id) ? (
-                        <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">Online</span>
+                        <span className="text-[8px] sm:text-[10px] text-emerald-500 font-bold uppercase tracking-widest">Online</span>
                       ) : (
-                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Offline</span>
+                        <span className="text-[8px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-widest">Offline</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-wider">
+                    <div className="flex items-center gap-1 text-[8px] sm:text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-wider">
                       <Package className="h-3 w-3" aria-hidden="true" />
-                      {selectedConv.listing_title}
+                      <span className="truncate max-w-[120px] sm:max-w-none">{selectedConv.listing_title}</span>
                     </div>
                   </div>
                 </div>
@@ -394,14 +404,14 @@ const Messages: React.FC = () => {
               {/* Messages List */}
               <div 
                 ref={scrollRef}
-                className="flex-grow overflow-y-auto p-6 space-y-4 bg-slate-50/30 dark:bg-slate-950/20"
+                className="flex-grow overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50/30 dark:bg-slate-950/20"
                 aria-live="polite"
               >
                 {selectedConv.messages.map((msg, idx) => {
                   const isMe = msg.sender_id === user?.id;
                   return (
-                    <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[70%] p-4 rounded-2xl shadow-sm ${
+                    <div key={`msg-${msg.id}-${idx}`} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] sm:max-w-[70%] p-3 sm:p-4 rounded-2xl shadow-sm ${
                         isMe 
                           ? 'bg-indigo-600 dark:bg-indigo-500 text-white rounded-tr-none' 
                           : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-700 rounded-tl-none'
@@ -426,7 +436,7 @@ const Messages: React.FC = () => {
               </div>
 
               {/* Reply Box */}
-              <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <div className="p-3 sm:p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 pb-safe">
                 <form onSubmit={handleSendReply} className="flex gap-2">
                   <label htmlFor="reply-input" className="sr-only">Type your message</label>
                   <input

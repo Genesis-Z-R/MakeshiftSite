@@ -14,10 +14,5 @@ primary_region = "ams"
   min_machines_running = 0
   processes = ["app"]
 
-[[mounts]]
-  source = "campus_data"
-  destination = "/data"
-
 [env]
-  DATABASE_PATH = "/data/campus_marketplace.db"
   NODE_ENV = "production"

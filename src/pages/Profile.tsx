@@ -43,14 +43,12 @@ const Profile: React.FC = () => {
     const fetchData = async () => {
       try {
         const [listingsRes, transactionsRes, warningsRes] = await Promise.all([
-          api.get('/listings'),
+          api.get('/listings', { params: { seller_id: user?.id } }),
           api.get('/transactions'),
           api.get('/warnings')
         ]);
         
-        // Filter listings by current user
-        const allListings = Array.isArray(listingsRes.data) ? listingsRes.data : [];
-        const userListings = allListings.filter((l: any) => l.seller_id === user?.id);
+        const userListings = Array.isArray(listingsRes.data) ? listingsRes.data : [];
         setListings(userListings);
         setTransactions(Array.isArray(transactionsRes.data) ? transactionsRes.data : []);
         setWarnings(Array.isArray(warningsRes.data) ? warningsRes.data : []);
@@ -144,8 +142,8 @@ const Profile: React.FC = () => {
                   Account Warnings
                 </h3>
                 <div className="space-y-3">
-                  {warnings.map((warning) => (
-                    <div key={warning.id} className="bg-white/50 dark:bg-slate-900/50 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/20">
+                  {warnings.map((warning, idx) => (
+                    <div key={`warning-${warning.id}-${idx}`} className="bg-white/50 dark:bg-slate-900/50 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/20">
                       <div className="flex justify-between items-start mb-1">
                         <span className="text-[10px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-wider">From Admin: {warning.admin_name}</span>
                         <span className="text-[10px] text-amber-400 dark:text-amber-600">{new Date(warning.created_at).toLocaleDateString()}</span>
@@ -174,8 +172,8 @@ const Profile: React.FC = () => {
               </div>
             ) : listings.length > 0 ? (
               <div className="space-y-4">
-                {listings.map((listing) => (
-                  <div key={listing.id} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between group transition-colors duration-200">
+                {listings.map((listing, idx) => (
+                  <div key={`listing-${listing.id}-${idx}`} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between group transition-colors duration-200">
                     <div>
                       <h4 className="font-bold text-slate-900 dark:text-slate-50 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{listing.title}</h4>
                       <div className="flex items-center gap-4 mt-1">
@@ -185,6 +183,11 @@ const Profile: React.FC = () => {
                         }`}>
                           {listing.status}
                         </span>
+                        {listing.sold_count > 0 && (
+                          <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                            {listing.sold_count} sold
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -242,8 +245,8 @@ const Profile: React.FC = () => {
               </div>
             ) : transactions.length > 0 ? (
               <div className="space-y-4">
-                {transactions.map((tx) => (
-                  <div key={tx.id} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4 transition-colors duration-200">
+                {transactions.map((tx, idx) => (
+                  <div key={`tx-${tx.id}-${idx}`} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4 transition-colors duration-200">
                     <div className="h-16 w-16 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-800 flex-shrink-0">
                       <img src={tx.image_url || 'https://picsum.photos/seed/tx/200/200'} alt={`Image of ${tx.title}`} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                     </div>
