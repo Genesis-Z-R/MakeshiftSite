@@ -28,7 +28,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [typingUsers, setTypingUsers] = useState<Map<string, boolean>>(new Map());
 
   useEffect(() => {
-    const newSocket = io();
+    const newSocket = io(import.meta.env.VITE_API_URL || undefined);
     setSocket(newSocket);
 
     newSocket.on('online_users', (users: number[]) => {

@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -15,6 +16,8 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'campus-secret-key';
 const UPLOADS_DIR = process.env.UPLOADS_PATH || path.join(process.cwd(), 'uploads');
+// If running from within backend folder, ensure we don't nest uploads too deep if not intended
+// but usually process.cwd() is the project root in most deployment platforms.
 
 // Ensure uploads directory exists
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -41,8 +44,9 @@ async function startServer() {
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
     cors: {
-      origin: "*",
-      methods: ["GET", "POST"]
+      origin: process.env.FRONTEND_URL || "*",
+      methods: ["GET", "POST"],
+      credentials: true
     }
   });
 
@@ -184,6 +188,10 @@ async function startServer() {
   };
   await seedData();
 
+  app.use(cors({
+    origin: process.env.FRONTEND_URL || "*",
+    credentials: true
+  }));
   app.use(express.json());
   app.use('/uploads', express.static(UPLOADS_DIR));
 
@@ -701,10 +709,11 @@ async function startServer() {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
+      root: path.join(process.cwd(), 'frontend')
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static('dist'));
+    app.use(express.static(path.join(process.cwd(), 'frontend/dist')));
   }
 
   httpServer.listen(PORT, '0.0.0.0', () => {

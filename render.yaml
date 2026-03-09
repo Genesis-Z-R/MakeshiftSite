@@ -16,7 +16,19 @@ services:
         fromDatabase:
           name: campus-db
           property: connectionString
+      - key: APP_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
     disk:
       name: campus-data
       mountPath: /data
       sizeGB: 1
+
+databases:
+  - name: campus-db
+    plan: free
+    databaseName: campus_marketplace
+    user: campus_user

@@ -1,45 +1,73 @@
-# Campus Marketplace Deployment Guide (Fly.io)
+# Campus Marketplace Deployment Guide
 
-This application is ready to be deployed to Fly.io. It uses SQLite for data storage and Socket.io for real-time messaging.
+This project is organized into two main directories for a **Split Architecture** deployment:
 
-## Option 1: Deploying via GitHub (Recommended for automatic updates)
+-   `/backend`: Contains the Express server, PostgreSQL connection, and Socket.io logic.
+-   `/frontend`: Contains the React application, Tailwind CSS, and Vite configuration.
 
-If you have connected your GitHub repository to Fly.io:
+## Option 1: Split Architecture (Recommended)
 
-1.  **Create the App on Fly.io:**
-    *   Go to the [Fly.io Dashboard](https://fly.io/dashboard).
-    *   Click **"Launch a new app"** and select your GitHub repository.
-    *   Choose a name (e.g., `campus-marketplace`). **Note:** This should match the `app` name in your `fly.toml` if you want to use the existing configuration.
+### 1. Database: Supabase
+1.  Create a project on [Supabase](https://supabase.com).
+2.  Go to **Project Settings > Database** and copy the **Connection String** (URI).
+3.  You will use this as your `DATABASE_URL`.
 
-2.  **IMPORTANT: Create a Volume (Required for Database):**
-    *   Fly.io won't automatically create the persistent volume required for SQLite.
-    *   Once the app is created (even if the first deployment fails), go to the **"Volumes"** tab in your app dashboard on the Fly.io website.
-    *   Click **"Create Volume"**.
-    *   **Name:** `campus_data` (This MUST match the `source` in `fly.toml`).
-    *   **Size:** 1GB (Free tier friendly).
-    *   **Region:** Choose the same region as your app.
+### 2. Backend: Railway
+1.  Connect your GitHub repository to [Railway](https://railway.app).
+2.  Add a **New Service** from your repo.
+3.  Set the **Root Directory** to `backend`.
+4.  In **Variables**, add:
+    *   `DATABASE_URL`: (From Supabase)
+    *   `JWT_SECRET`: (Random string)
+    *   `FRONTEND_URL`: (Your Vercel URL, e.g., `https://your-app.vercel.app`)
+    *   `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`: (From Google Console)
+5.  Railway will use the `backend/Dockerfile` to build and deploy.
 
-3.  **Set Secrets:**
-    *   Go to the **"Secrets"** tab in your app dashboard.
-    *   Add a secret named `JWT_SECRET` with a random string value.
-    *   (Optional) Add `ADMIN_PASSWORD` if you want to change the default admin registration password.
+### 3. Frontend: Vercel
+1.  Connect your GitHub repository to [Vercel](https://vercel.com).
+2.  Select the project and set the **Root Directory** to `frontend`.
+3.  In **Environment Variables**, add:
+    *   `VITE_API_URL`: (Your Railway URL, e.g., `https://your-backend.railway.app`)
+4.  Vercel will build and deploy the React app.
 
-4.  **Deploy:**
-    *   Push your code to GitHub. Fly.io will automatically build and deploy your app.
+---
 
-## Option 2: Deploying via Fly CLI
+## Option 2: All-in-One (Render.com)
+
+Render.com is the easiest way to deploy this application using the provided `render.yaml` blueprint.
+
+1.  **Connect GitHub:** Connect your GitHub repository to [Render.com](https://render.com).
+2.  **Create Blueprint:**
+    *   Click **"New +"** and select **"Blueprint"**.
+    *   Select your repository.
+    *   Render will automatically detect the `render.yaml` file and set up:
+        *   A **Web Service** for the application.
+        *   A **PostgreSQL Database**.
+        *   A **Persistent Disk** for file uploads.
+3.  **Configure Environment Variables:**
+    *   During setup, Render will prompt you for `APP_URL`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET`.
+    *   `JWT_SECRET` will be generated automatically.
+    *   `DATABASE_URL` will be linked automatically from the created database.
+4.  **Deploy:** Click **"Apply"** to start the deployment.
+
+## Option 2: Deploying to Fly.io
 
 1.  **Install Fly CLI:** [Instructions here](https://fly.io/docs/hands-on/install-flyctl/)
 2.  **Login:** `fly auth login`
-3.  **Create Volume:**
+3.  **Create App & Database:**
+    ```bash
+    fly launch
+    ```
+    *   Follow the prompts to create a PostgreSQL database when asked.
+4.  **Create Volume (for uploads):**
     ```bash
     fly volumes create campus_data --size 1 --region <your-region>
     ```
-4.  **Set Secrets:**
+5.  **Set Secrets:**
     ```bash
-    fly secrets set JWT_SECRET=your_random_secret_string
+    fly secrets set JWT_SECRET=your_random_secret_string GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... APP_URL=...
     ```
-5.  **Deploy:**
+6.  **Deploy:**
     ```bash
     fly deploy
     ```
@@ -47,5 +75,6 @@ If you have connected your GitHub repository to Fly.io:
 ## Configuration Details
 
 *   **Dockerfile:** Handles the multi-stage build of the React frontend and the Express backend.
-*   **fly.toml:** Configures the HTTP service and mounts the `campus_data` volume to `/data`.
+*   **render.yaml:** Blueprint for Render.com deployment.
+*   **fly.toml:** Configuration for Fly.io deployment.
 *   **Database:** The application uses PostgreSQL. Ensure the `DATABASE_URL` environment variable is set in your production environment.
