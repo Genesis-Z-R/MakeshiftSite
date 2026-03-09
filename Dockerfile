@@ -1,32 +1,16 @@
-# Build stage
-FROM node:20-slim AS builder
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm install
-
-COPY . .
-RUN npm run build
-
 # Runtime stage
 FROM node:20-slim
-
 WORKDIR /app
 
+# Only install production dependencies (no typescript, no tsx)
 COPY package*.json ./
-# Install all dependencies including devDependencies because we use tsx to run the server
-RUN npm install
+RUN npm install --omit=dev 
 
+# Copy ONLY the compiled folder
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/server.ts ./
-COPY --from=builder /app/db.ts ./
-COPY --from=builder /app/.env.example ./.env
 
-# Set environment variables
+# Railway provides the PORT
 ENV NODE_ENV=production
-ENV PORT=3000
 
-EXPOSE 3000
-
-CMD ["npm", "start"]
+# Run the compiled javascript file
+CMD ["node", "dist/server.js"]
