@@ -1,11 +1,10 @@
 # Campus Marketplace Deployment Guide
 
-This project is organized into two main directories for a **Split Architecture** deployment:
+This application is ready to be deployed to **Render.com** (all-in-one) or a **Split Architecture** (Vercel + Railway + Supabase).
 
--   `/backend`: Contains the Express server, PostgreSQL connection, and Socket.io logic.
--   `/frontend`: Contains the React application, Tailwind CSS, and Vite configuration.
+## Option 1: Split Architecture (Recommended for Scalability)
 
-## Option 1: Split Architecture (Recommended)
+This setup separates your frontend and backend for better performance and management.
 
 ### 1. Database: Supabase
 1.  Create a project on [Supabase](https://supabase.com).
@@ -15,20 +14,19 @@ This project is organized into two main directories for a **Split Architecture**
 ### 2. Backend: Railway
 1.  Connect your GitHub repository to [Railway](https://railway.app).
 2.  Add a **New Service** from your repo.
-3.  Set the **Root Directory** to `backend`.
-4.  In **Variables**, add:
+3.  In **Variables**, add:
     *   `DATABASE_URL`: (From Supabase)
     *   `JWT_SECRET`: (Random string)
     *   `FRONTEND_URL`: (Your Vercel URL, e.g., `https://your-app.vercel.app`)
     *   `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`: (From Google Console)
-5.  Railway will use the `backend/Dockerfile` to build and deploy.
+4.  Railway will automatically detect the `Dockerfile` or use `npm run start`.
 
 ### 3. Frontend: Vercel
 1.  Connect your GitHub repository to [Vercel](https://vercel.com).
-2.  Select the project and set the **Root Directory** to `frontend`.
+2.  Select the project.
 3.  In **Environment Variables**, add:
     *   `VITE_API_URL`: (Your Railway URL, e.g., `https://your-backend.railway.app`)
-4.  Vercel will build and deploy the React app.
+4.  Vercel will build the React app and deploy it as a static site.
 
 ---
 
