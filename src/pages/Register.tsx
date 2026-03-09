@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAccessibility } from '../context/AccessibilityContext';
-import api from '../services/api';
+import { supabase } from '../lib/supabase';
 import { UserPlus, Mail, Lock, User, AlertCircle, Shield } from 'lucide-react';
 
 const Register: React.FC = () => {
@@ -12,46 +12,22 @@ const Register: React.FC = () => {
   const [adminPassword, setAdminPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
   const { announce } = useAccessibility();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const handleOAuthMessage = (event: MessageEvent) => {
-      const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
-        return;
-      }
-      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-        const { token, user } = event.data;
-        login(token, user);
-        announce('Account created successfully! Welcome to CampusMarket.');
-        navigate('/');
-      }
-    };
-    window.addEventListener('message', handleOAuthMessage);
-    return () => window.removeEventListener('message', handleOAuthMessage);
-  }, [login, navigate, announce]);
 
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await api.get('/auth/google/url');
-      const { url } = response.data;
-      
-      const width = 500;
-      const height = 600;
-      const left = window.screenX + (window.outerWidth - width) / 2;
-      const top = window.screenY + (window.outerHeight - height) / 2;
-      
-      window.open(
-        url,
-        'google_oauth',
-        `width=${width},height=${height},left=${left},top=${top}`
-      );
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
     } catch (err: any) {
-      setError('Failed to initialize Google login');
+      setError(err.message || 'Failed to initialize Google login');
     } finally {
       setLoading(false);
     }
@@ -62,12 +38,21 @@ const Register: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await api.post('/auth/register', { name, email, password, adminPassword });
-      login(response.data.token, response.data.user);
-      announce('Account created successfully! Welcome to CampusMarket.');
-      navigate('/');
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name,
+            role: adminPassword === 'Genesis@6112' ? 'admin' : 'student'
+          }
+        }
+      });
+      if (error) throw error;
+      announce('Account created successfully! Please check your email for verification.');
+      navigate('/login');
     } catch (err: any) {
-      const msg = err.response?.data?.error || 'Registration failed';
+      const msg = err.message || 'Registration failed';
       setError(msg);
       announce(msg, 'assertive');
     } finally {

@@ -16,7 +16,7 @@ interface ListingDetail {
   price: number;
   category: string;
   image_url: string;
-  seller_id: number;
+  seller_id: string;
   seller_name: string;
   seller_email: string;
   status: string;

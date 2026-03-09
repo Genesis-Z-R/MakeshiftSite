@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAccessibility } from '../context/AccessibilityContext';
-import api from '../services/api';
+import { supabase } from '../lib/supabase';
 import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
 
 const Login: React.FC = () => {
@@ -10,46 +10,22 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
   const { announce } = useAccessibility();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const handleOAuthMessage = (event: MessageEvent) => {
-      const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
-        return;
-      }
-      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-        const { token, user } = event.data;
-        login(token, user);
-        announce('Login successful! Welcome back.');
-        navigate('/');
-      }
-    };
-    window.addEventListener('message', handleOAuthMessage);
-    return () => window.removeEventListener('message', handleOAuthMessage);
-  }, [login, navigate, announce]);
 
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await api.get('/auth/google/url');
-      const { url } = response.data;
-      
-      const width = 500;
-      const height = 600;
-      const left = window.screenX + (window.outerWidth - width) / 2;
-      const top = window.screenY + (window.outerHeight - height) / 2;
-      
-      window.open(
-        url,
-        'google_oauth',
-        `width=${width},height=${height},left=${left},top=${top}`
-      );
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
     } catch (err: any) {
-      setError('Failed to initialize Google login');
+      setError(err.message || 'Failed to initialize Google login');
     } finally {
       setLoading(false);
     }
@@ -60,12 +36,12 @@ const Login: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await api.post('/auth/login', { email, password });
-      login(response.data.token, response.data.user);
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
       announce('Login successful! Redirecting to marketplace.');
       navigate('/');
     } catch (err: any) {
-      const msg = err.response?.data?.error || 'Login failed';
+      const msg = err.message || 'Login failed';
       setError(msg);
       announce(msg, 'assertive');
     } finally {
@@ -155,27 +131,6 @@ const Login: React.FC = () => {
             {loading ? 'Logging in...' : 'Sign In'}
           </button>
         </form>
-
-        <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-          <button
-            onClick={async () => {
-              setLoading(true);
-              try {
-                const response = await api.post('/auth/login', { email: 'admin@campus.edu', password: 'password123' });
-                login(response.data.token, response.data.user);
-                announce('Demo login successful!');
-                navigate('/');
-              } catch (err) {
-                setError('Demo login failed. Try registering.');
-              } finally {
-                setLoading(false);
-              }
-            }}
-            className="w-full bg-slate-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 py-3 rounded-xl font-bold hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all border border-indigo-100 dark:border-indigo-900/30"
-          >
-            Quick Login (Admin Demo)
-          </button>
-        </div>
 
         <p className="text-center text-slate-500 dark:text-slate-400 mt-8">
           Don't have an account?{' '}

@@ -1,5 +1,5 @@
 {
   "name": "Campus Marketplace",
-  "description": "A modern marketplace for university students to buy and sell items securely within their campus community.",
+  "description": "A modern campus marketplace built with a split architecture: Railway (Backend), Vercel (Frontend), and Supabase (Database & Auth).",
   "requestFramePermissions": []
 }

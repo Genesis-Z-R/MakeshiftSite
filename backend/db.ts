@@ -22,16 +22,17 @@ const initDb = async () => {
     console.log('Connected to PostgreSQL successfully');
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
-        id UUID PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
         email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
         role TEXT DEFAULT 'student',
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS listings (
         id SERIAL PRIMARY KEY,
-        seller_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        seller_id INTEGER NOT NULL REFERENCES users(id),
         title TEXT NOT NULL,
         description TEXT NOT NULL,
         price REAL NOT NULL,
@@ -42,27 +43,35 @@ const initDb = async () => {
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- Add sold_count column if it doesn't exist
+      DO $$ 
+      BEGIN 
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='listings' AND column_name='sold_count') THEN
+          ALTER TABLE listings ADD COLUMN sold_count INTEGER DEFAULT 0;
+        END IF;
+      END $$;
+
       CREATE TABLE IF NOT EXISTS messages (
         id SERIAL PRIMARY KEY,
-        sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        listing_id INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+        sender_id INTEGER NOT NULL REFERENCES users(id),
+        receiver_id INTEGER NOT NULL REFERENCES users(id),
+        listing_id INTEGER NOT NULL REFERENCES listings(id),
         content TEXT NOT NULL,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS cart_items (
         id SERIAL PRIMARY KEY,
-        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        listing_id INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        listing_id INTEGER NOT NULL REFERENCES listings(id),
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, listing_id)
       );
 
       CREATE TABLE IF NOT EXISTS transactions (
         id SERIAL PRIMARY KEY,
-        buyer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        listing_id INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+        buyer_id INTEGER NOT NULL REFERENCES users(id),
+        listing_id INTEGER NOT NULL REFERENCES listings(id),
         amount REAL NOT NULL,
         status TEXT DEFAULT 'completed',
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
@@ -70,8 +79,8 @@ const initDb = async () => {
 
       CREATE TABLE IF NOT EXISTS reports (
         id SERIAL PRIMARY KEY,
-        reporter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        reported_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        reporter_id INTEGER NOT NULL REFERENCES users(id),
+        reported_id INTEGER NOT NULL REFERENCES users(id),
         reason TEXT NOT NULL,
         status TEXT DEFAULT 'pending',
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
@@ -79,8 +88,8 @@ const initDb = async () => {
 
       CREATE TABLE IF NOT EXISTS warnings (
         id SERIAL PRIMARY KEY,
-        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        admin_id INTEGER NOT NULL REFERENCES users(id),
         message TEXT NOT NULL,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );

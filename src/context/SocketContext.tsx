@@ -4,7 +4,7 @@ import { useAuth } from './AuthContext';
 
 interface SocketContextType {
   socket: Socket | null;
-  onlineUsers: number[];
+  onlineUsers: string[];
   notifications: number;
   clearNotifications: () => void;
   typingUsers: Map<string, boolean>; // key: "userId_listingId"
@@ -23,7 +23,7 @@ export const useSocket = () => useContext(SocketContext);
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [onlineUsers, setOnlineUsers] = useState<number[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [notifications, setNotifications] = useState(0);
   const [typingUsers, setTypingUsers] = useState<Map<string, boolean>>(new Map());
 
@@ -31,11 +31,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const newSocket = io(import.meta.env.VITE_API_URL || undefined);
     setSocket(newSocket);
 
-    newSocket.on('online_users', (users: number[]) => {
+    newSocket.on('online_users', (users: string[]) => {
       setOnlineUsers(users);
     });
 
-    newSocket.on('user_typing', (data: { sender_id: number; listing_id: number }) => {
+    newSocket.on('user_typing', (data: { sender_id: string; listing_id: number }) => {
       setTypingUsers(prev => {
         const next = new Map(prev);
         next.set(`${data.sender_id}_${data.listing_id}`, true);
@@ -43,7 +43,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
     });
 
-    newSocket.on('user_stop_typing', (data: { sender_id: number; listing_id: number }) => {
+    newSocket.on('user_stop_typing', (data: { sender_id: string; listing_id: number }) => {
       setTypingUsers(prev => {
         const next = new Map(prev);
         next.delete(`${data.sender_id}_${data.listing_id}`);

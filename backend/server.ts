@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import pool from './db';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
@@ -13,7 +14,10 @@ import axios from 'axios';
 
 dotenv.config();
 
+const JWT_SECRET = process.env.JWT_SECRET || 'campus-secret-key';
 const UPLOADS_DIR = process.env.UPLOADS_PATH || path.join(process.cwd(), 'uploads');
+// If running from within backend folder, ensure we don't nest uploads too deep if not intended
+// but usually process.cwd() is the project root in most deployment platforms.
 
 // Ensure uploads directory exists
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -46,11 +50,11 @@ async function startServer() {
     }
   });
 
-  const PORT = process.env.PORT || 3000;
+  const PORT = 3000;
 
   // Track online users
-  const userSockets = new Map<string, string>(); // userId -> socketId
-  const socketUsers = new Map<string, string>(); // socketId -> userId
+  const userSockets = new Map<number, string>(); // userId -> socketId
+  const socketUsers = new Map<string, number>(); // socketId -> userId
 
   const broadcastOnlineUsers = () => {
     const onlineUserIds = Array.from(userSockets.keys());
@@ -60,7 +64,7 @@ async function startServer() {
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
     
-    socket.on('authenticate', (userId: string) => {
+    socket.on('authenticate', (userId: number) => {
       userSockets.set(userId, socket.id);
       socketUsers.set(socket.id, userId);
       console.log(`User ${userId} authenticated on socket ${socket.id}`);
@@ -77,7 +81,7 @@ async function startServer() {
       console.log(`Socket ${socket.id} left room ${roomName}`);
     });
 
-    socket.on('typing', (data: { receiver_id: string; listing_id: number }) => {
+    socket.on('typing', (data: { receiver_id: number; listing_id: number }) => {
       const receiverSocketId = userSockets.get(data.receiver_id);
       if (receiverSocketId) {
         const senderId = socketUsers.get(socket.id);
@@ -88,7 +92,7 @@ async function startServer() {
       }
     });
 
-    socket.on('stop_typing', (data: { receiver_id: string; listing_id: number }) => {
+    socket.on('stop_typing', (data: { receiver_id: number; listing_id: number }) => {
       const receiverSocketId = userSockets.get(data.receiver_id);
       if (receiverSocketId) {
         const senderId = socketUsers.get(socket.id);
@@ -99,7 +103,7 @@ async function startServer() {
       }
     });
 
-    socket.on('send_message', (data: { receiver_id: string; sender_id: string; content: string; listing_id: number }) => {
+    socket.on('send_message', (data: { receiver_id: number; sender_id: number; content: string; listing_id: number }) => {
       const receiverSocketId = userSockets.get(data.receiver_id);
       
       // Emit to specific receiver if online
@@ -107,8 +111,9 @@ async function startServer() {
         io.to(receiverSocketId).emit('new_message', data);
       }
 
-      // Also emit to the room if they are in one (e.g., "chat_user1_user2_listing_5")
-      const roomName = `chat_${[data.sender_id, data.receiver_id].sort().join('_')}_${data.listing_id}`;
+      // Also emit to the room if they are in one (e.g., "chat_1_2_listing_5")
+      // This helps if the user has multiple tabs open
+      const roomName = `chat_${Math.min(data.sender_id, data.receiver_id)}_${Math.max(data.sender_id, data.receiver_id)}_${data.listing_id}`;
       socket.to(roomName).emit('new_message', data);
     });
 
@@ -136,12 +141,12 @@ async function startServer() {
       if (userCount === 0 || listingCount === 0) {
         console.log('Seeding database...');
         if (userCount === 0) {
-          const adminId = '00000000-0000-0000-0000-000000000000';
-          await pool.query('INSERT INTO users (id, name, email, role) VALUES ($1, $2, $3, $4)', [
-            adminId, 'Admin User', 'admin@campus.edu', 'admin'
+          const hashedPassword = bcrypt.hashSync('password123', 10);
+          await pool.query('INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)', [
+            'Admin User', 'admin@campus.edu', hashedPassword, 'admin'
           ]);
-          await pool.query('INSERT INTO users (id, name, email, role) VALUES ($1, $2, $3, $4)', [
-            '11111111-1111-1111-1111-111111111111', 'Jane Student', 'jane@campus.edu', 'student'
+          await pool.query('INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)', [
+            'Jane Student', 'jane@campus.edu', hashedPassword, 'student'
           ]);
         }
 
@@ -169,10 +174,9 @@ async function startServer() {
         ];
 
         if (listingCount === 0) {
-          const adminId = '00000000-0000-0000-0000-000000000000';
           for (const [title, desc, price, cat, img] of listings) {
-            await pool.query('INSERT INTO listings (seller_id, title, description, price, category, image_url) VALUES ($1, $2, $3, $4, $5, $6)', [
-              adminId, title, desc, price, cat, img
+            await pool.query('INSERT INTO listings (seller_id, title, description, price, category, image_url) VALUES (1, $1, $2, $3, $4, $5)', [
+              title, desc, price, cat, img
             ]);
           }
         }
@@ -208,48 +212,146 @@ async function startServer() {
     next();
   });
 
-  // --- Auth & Sync Routes ---
-  app.post('/api/auth/sync', async (req, res) => {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) return res.status(401).json({ error: 'Unauthorized' });
-
+  // --- Auth Routes ---
+  app.post('/api/auth/register', async (req, res) => {
+    const { name, email, password, adminPassword } = req.body;
     try {
-      // In a real app, you'd verify the token with Supabase
-      // For now, we'll assume the frontend sends the user data after Supabase login
-      // and we trust it (in production, ALWAYS verify the JWT)
-      const { id, name, email, role } = req.body;
+      const userCountRes = await pool.query('SELECT COUNT(*) as count FROM users');
+      const userCount = parseInt(userCountRes.rows[0].count);
       
-      await pool.query(
-        'INSERT INTO users (id, name, email, role) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET name = $2, role = $4',
-        [id, name, email, role || 'student']
+      let role = 'student';
+      if (adminPassword === 'Genesis@6112') {
+        role = 'admin';
+      } else if (userCount === 0) {
+        role = 'admin';
+      }
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const result = await pool.query(
+        'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id',
+        [name, email, hashedPassword, role]
       );
-      
-      res.json({ success: true });
-    } catch (err) {
-      console.error('Sync error:', err);
-      res.status(500).json({ error: 'Failed to sync user' });
+      const newUser = result.rows[0];
+      const token = jwt.sign({ id: newUser.id, email, role }, JWT_SECRET);
+      res.json({ token, user: { id: newUser.id, name, email, role } });
+    } catch (err: any) {
+      res.status(400).json({ error: 'Email already exists or invalid data' });
     }
   });
 
-  // Middleware to verify Supabase JWT
-  const authenticate = async (req: any, res: any, next: any) => {
+  app.post('/api/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = result.rows[0];
+    
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET);
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+  });
+
+  // --- Google OAuth Routes ---
+  app.get('/api/auth/google/url', (req, res) => {
+    const rootUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
+    const options = {
+      redirect_uri: `${process.env.APP_URL}/api/auth/google/callback`,
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      access_type: 'offline',
+      response_type: 'code',
+      prompt: 'consent',
+      scope: [
+        'https://www.googleapis.com/auth/userinfo.profile',
+        'https://www.googleapis.com/auth/userinfo.email',
+      ].join(' '),
+    };
+
+    const qs = new URLSearchParams(options);
+    res.json({ url: `${rootUrl}?${qs.toString()}` });
+  });
+
+  app.get('/api/auth/google/callback', async (req, res) => {
+    const code = req.query.code as string;
+    if (!code) return res.status(400).send('No code provided');
+
+    try {
+      // Exchange code for tokens
+      const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
+        code,
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: `${process.env.APP_URL}/api/auth/google/callback`,
+        grant_type: 'authorization_code',
+      });
+
+      const { access_token, id_token } = tokenResponse.data;
+
+      // Get user info from Google
+      const googleUserResponse = await axios.get(
+        `https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${access_token}`,
+        {
+          headers: {
+            Authorization: `Bearer ${id_token}`,
+          },
+        }
+      );
+
+      const googleUser = googleUserResponse.data;
+
+      // Check if user exists in DB
+      const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [googleUser.email]);
+      let user = userResult.rows[0];
+
+      if (!user) {
+        // Create new user
+        const userCountRes = await pool.query('SELECT COUNT(*) as count FROM users');
+        const userCount = parseInt(userCountRes.rows[0].count);
+        const role = userCount === 0 ? 'admin' : 'student';
+        const insertResult = await pool.query(
+          'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id',
+          [
+            googleUser.name,
+            googleUser.email,
+            bcrypt.hashSync(Math.random().toString(36), 10), // Random password for OAuth users
+            role
+          ]
+        );
+        user = { id: insertResult.rows[0].id, name: googleUser.name, email: googleUser.email, role };
+      }
+
+      const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET);
+
+      // Send success message to parent window and close popup
+      res.send(`
+        <html>
+          <body>
+            <script>
+              if (window.opener) {
+                window.opener.postMessage({ 
+                  type: 'OAUTH_AUTH_SUCCESS', 
+                  token: '${token}', 
+                  user: ${JSON.stringify({ id: user.id, name: user.name, email: user.email, role: user.role })} 
+                }, '*');
+                window.close();
+              } else {
+                window.location.href = '/';
+              }
+            </script>
+            <p>Authentication successful. This window should close automatically.</p>
+          </body>
+        </html>
+      `);
+    } catch (err: any) {
+      console.error('Google OAuth error:', err.response?.data || err.message);
+      res.status(500).send('Authentication failed');
+    }
+  });
+
+  // Middleware to verify JWT
+  const authenticate = (req: any, res: any, next: any) => {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
-    
     try {
-      // For this implementation, we'll decode the JWT to get the user ID
-      // In a real Railway app, you'd use a library like `jsonwebtoken` with your Supabase JWT Secret
-      const decoded: any = jwt.decode(token);
-      if (!decoded || !decoded.sub) {
-        return res.status(401).json({ error: 'Invalid token' });
-      }
-      
-      // Map Supabase 'sub' to our user id
-      req.user = {
-        id: decoded.sub,
-        email: decoded.email,
-        role: decoded.user_metadata?.role || 'student'
-      };
+      req.user = jwt.verify(token, JWT_SECRET);
       next();
     } catch (err) {
       res.status(401).json({ error: 'Invalid token' });
@@ -607,14 +709,11 @@ async function startServer() {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
+      root: path.join(process.cwd(), 'frontend')
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    app.use(express.static(path.join(process.cwd(), 'frontend/dist')));
   }
 
   httpServer.listen(PORT, '0.0.0.0', () => {

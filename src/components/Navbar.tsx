@@ -8,7 +8,7 @@ import { ShoppingBag, ShoppingCart, Settings, Moon, Sun, Eye, Zap, Menu, X as Cl
 import ConfirmationModal from './ConfirmationModal';
 
 const Navbar: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const { cart } = useCart();
   const { notifications } = useSocket();
   const { darkMode, highContrast, reducedMotion, toggleDarkMode, toggleHighContrast, toggleReducedMotion } = useAccessibility();
@@ -39,8 +39,8 @@ const Navbar: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showSettings]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await signOut();
     navigate('/login');
     setShowLogoutConfirm(false);
   };

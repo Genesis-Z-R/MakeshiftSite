@@ -7,8 +7,8 @@ import { useAccessibility } from '../context/AccessibilityContext';
 
 interface Message {
   id: number;
-  sender_id: number;
-  receiver_id: number;
+  sender_id: string;
+  receiver_id: string;
   listing_id: number;
   content: string;
   created_at: string;
@@ -20,7 +20,7 @@ interface Message {
 interface Conversation {
   listing_id: number;
   listing_title: string;
-  other_user_id: number;
+  other_user_id: string;
   other_user_name: string;
   last_message: string;
   last_time: string;
@@ -48,7 +48,7 @@ const Messages: React.FC = () => {
   // Join/Leave rooms when selected conversation changes
   useEffect(() => {
     if (socket && selectedConv && user) {
-      const roomName = `chat_${Math.min(user.id, selectedConv.other_user_id)}_${Math.max(user.id, selectedConv.other_user_id)}_${selectedConv.listing_id}`;
+      const roomName = `chat_${[user.id, selectedConv.other_user_id].sort().join('_')}_${selectedConv.listing_id}`;
       socket.emit('join_room', roomName);
       
       return () => {
@@ -100,7 +100,7 @@ const Messages: React.FC = () => {
     }
   };
 
-  const isOtherUserOnline = (otherUserId: number) => onlineUsers.includes(otherUserId);
+  const isOtherUserOnline = (otherUserId: string) => onlineUsers.includes(otherUserId);
   const isOtherUserTyping = selectedConv ? typingUsers.has(`${selectedConv.other_user_id}_${selectedConv.listing_id}`) : false;
 
   useEffect(() => {
@@ -250,7 +250,7 @@ const Messages: React.FC = () => {
       };
 
       if (socket) {
-        const roomName = `chat_${Math.min(user.id, selectedConv.other_user_id)}_${Math.max(user.id, selectedConv.other_user_id)}_${selectedConv.listing_id}`;
+        const roomName = `chat_${[user.id, selectedConv.other_user_id].sort().join('_')}_${selectedConv.listing_id}`;
         socket.emit('send_message', socketData);
         socket.emit('stop_typing', {
           receiver_id: selectedConv.other_user_id,

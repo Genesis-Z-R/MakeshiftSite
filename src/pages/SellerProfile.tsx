@@ -11,10 +11,11 @@ interface Listing {
   category: string;
   image_url: string;
   created_at: string;
+  sold_count?: number;
 }
 
 interface SellerInfo {
-  id: number;
+  id: string;
   name: string;
   email: string;
   created_at: string;
@@ -38,7 +39,7 @@ const SellerProfile: React.FC = () => {
         // The /api/listings route might need adjustment to filter by seller_id if not already supported
         // Let's assume for now we filter on frontend if backend doesn't support it yet, 
         // but better to check server.ts
-        setListings(listingsRes.data.filter((l: any) => l.seller_id === Number(id)));
+        setListings(listingsRes.data.filter((l: any) => l.seller_id === id));
         announce(`Viewing profile of ${sellerRes.data.name}`);
       } catch (error) {
         console.error('Error fetching seller data:', error);

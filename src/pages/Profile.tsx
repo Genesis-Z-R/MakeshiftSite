@@ -27,6 +27,7 @@ interface Warning {
   message: string;
   created_at: string;
   admin_name: string;
+  admin_id: string;
 }
 
 const Profile: React.FC = () => {

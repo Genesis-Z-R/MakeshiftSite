@@ -6,7 +6,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { useSocket } from '../context/SocketContext';
 
 interface AdminUser {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: string;
@@ -25,8 +25,8 @@ interface SystemStats {
 
 interface Report {
   id: number;
-  reporter_id: number;
-  reported_id: number;
+  reporter_id: string;
+  reported_id: string;
   reason: string;
   status: string;
   created_at: string;
@@ -40,9 +40,9 @@ const Admin: React.FC = () => {
   const [reports, setReports] = useState<Report[]>([]);
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userToDelete, setUserToDelete] = useState<number | null>(null);
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'users' | 'reports' | 'errors'>('users');
-  const [warningUserId, setWarningUserId] = useState<number | null>(null);
+  const [warningUserId, setWarningUserId] = useState<string | null>(null);
   const [warningMessage, setWarningMessage] = useState('');
   const [sendingWarning, setSendingWarning] = useState(false);
   const { onlineUsers } = useSocket();
