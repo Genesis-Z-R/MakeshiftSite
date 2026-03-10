@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { createServer as createViteServer } from 'vite';
 import jwt from 'jsonwebtoken';
 import pool from './db';
 import dotenv from 'dotenv';
@@ -13,7 +12,6 @@ import fs from 'fs';
 dotenv.config();
 
 const UPLOADS_DIR = process.env.UPLOADS_PATH || path.join(process.cwd(), 'uploads');
-
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
@@ -32,87 +30,71 @@ async function startServer() {
   const app = express();
   const httpServer = createServer(app);
 
-  // --- 1. Robust CORS Configuration ---
-  const frontendUrl = process.env.FRONTEND_URL;
+  // --- 1. CORS Setup ---
   const allowedOrigins = [
-    frontendUrl,
+    process.env.FRONTEND_URL,
     'https://makeshift-site.vercel.app',
-    /\.vercel\.app$/ // Matches all Vercel deployment/preview URLs
+    /\.vercel\.app$/ 
   ];
 
-  const corsOptions: cors.CorsOptions = {
+  app.use(cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      const isAllowed = allowedOrigins.some(pattern => 
-        pattern instanceof RegExp ? pattern.test(origin) : pattern === origin
-      );
-      if (isAllowed) callback(null, true);
-      else callback(new Error('Not allowed by CORS'));
+      if (!origin || allowedOrigins.some(p => p instanceof RegExp ? p.test(origin) : p === origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('CORS blocked'));
+      }
     },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-  };
+    credentials: true
+  }));
 
-  app.use(cors(corsOptions));
   app.use(express.json());
   app.use('/uploads', express.static(UPLOADS_DIR));
 
-  // --- 2. Socket.io with Shared CORS ---
+  // --- 2. Socket.io ---
   const io = new Server(httpServer, {
     cors: { origin: true, methods: ["GET", "POST"], credentials: true }
   });
 
   const userSockets = new Map<string, string>();
-  const socketUsers = new Map<string, string>();
 
   io.on('connection', (socket) => {
     socket.on('authenticate', (userId: string) => {
       userSockets.set(userId, socket.id);
-      socketUsers.set(socket.id, userId);
     });
-
-    socket.on('send_message', (data) => {
-      const receiverSocketId = userSockets.get(data.receiver_id);
-      if (receiverSocketId) io.to(receiverSocketId).emit('new_message', data);
-    });
-
     socket.on('disconnect', () => {
-      const userId = socketUsers.get(socket.id);
-      if (userId) { userSockets.delete(userId); socketUsers.delete(socket.id); }
+      for (const [userId, socketId] of userSockets.entries()) {
+        if (socketId === socket.id) userSockets.delete(userId);
+      }
     });
   });
 
-  // --- 3. Updated Auth Middleware (UUID support) ---
+  // --- 3. Auth Middleware ---
   const authenticate = async (req: any, res: any, next: any) => {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
-    
     try {
-      // Decode Supabase JWT - 'sub' is the UUID string
       const decoded: any = jwt.decode(token);
-      if (!decoded || !decoded.sub) return res.status(401).json({ error: 'Invalid token' });
-      
-      req.user = {
-        id: decoded.sub, 
-        email: decoded.email,
-        role: decoded.user_metadata?.role || 'student'
-      };
+      if (!decoded?.sub) return res.status(401).json({ error: 'Invalid token' });
+      req.user = { id: decoded.sub, email: decoded.email };
       next();
-    } catch (err) {
-      res.status(401).json({ error: 'Invalid token' });
-    }
+    } catch (err) { res.status(401).json({ error: 'Invalid token' }); }
   };
 
-  // --- 4. Simplified Routes ---
-  // Notice: /api/auth/sync is REMOVED. Database trigger handles this now.
-
+  // --- 4. Listings Routes ---
   app.get('/api/listings', async (req, res) => {
     try {
-      const result = await pool.query('SELECT * FROM listings WHERE status = $1 ORDER BY created_at DESC', ['available']);
-      res.json(result.rows);
+      const result = await pool.query(`
+        SELECT l.*, u.name AS seller_name 
+        FROM listings l
+        JOIN users u ON l.seller_id = u.id
+        WHERE l.status = 'available'
+        ORDER BY l.created_at DESC
+      `);
+      res.json(result.rows || []);
     } catch (err) {
-      res.status(500).json({ error: 'Database error' });
+      console.error(err);
+      res.status(500).json([]); // Prevent frontend crash
     }
   });
 
@@ -125,12 +107,25 @@ async function startServer() {
         [req.user.id, title, description, price, category, image_url]
       );
       res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Failed to create' }); }
+  });
+
+  // --- 5. New: Messages Route (Fixes forEach error) ---
+  app.get('/api/messages/:otherUserId', authenticate, async (req: any, res) => {
+    try {
+      const result = await pool.query(`
+        SELECT * FROM messages 
+        WHERE (sender_id = $1 AND receiver_id = $2)
+           OR (sender_id = $2 AND receiver_id = $1)
+        ORDER BY created_at ASC
+      `, [req.user.id, req.params.otherUserId]);
+      res.json(result.rows || []); // Ensure array
     } catch (err) {
-      res.status(500).json({ error: 'Failed to create listing' });
+      res.status(500).json([]); 
     }
   });
 
-  // --- 5. Production Serving ---
+  // --- 6. Production Config ---
   const PORT = process.env.PORT || 3000;
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.join(process.cwd(), 'dist');
@@ -138,9 +133,7 @@ async function startServer() {
     app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
   }
 
-  httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+  httpServer.listen(PORT, '0.0.0.0', () => console.log(`Server on ${PORT}`));
 }
 
 startServer();
