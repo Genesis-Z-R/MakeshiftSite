@@ -9,7 +9,6 @@ import { Server } from 'socket.io';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import axios from 'axios';
 
 dotenv.config();
 
@@ -20,9 +19,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, UPLOADS_DIR);
-  },
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
@@ -30,143 +27,112 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage });
-const systemErrors: { timestamp: string; message: string; path?: string }[] = [];
 
 async function startServer() {
   const app = express();
   const httpServer = createServer(app);
 
-  // --- CORS Configuration ---
+  // --- 1. Robust CORS Configuration ---
   const frontendUrl = process.env.FRONTEND_URL;
-  console.log(`Configuring CORS for Frontend: ${frontendUrl || 'Allowing All'}`);
-
   const allowedOrigins = [
     frontendUrl,
     'https://makeshift-site.vercel.app',
-    /\.vercel\.app$/ // This allows any Vercel preview/deployment URL
+    /\.vercel\.app$/ // Matches all Vercel deployment/preview URLs
   ];
 
   const corsOptions: cors.CorsOptions = {
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      
-      const isAllowed = allowedOrigins.some(pattern => {
-        if (!pattern) return false;
-        return typeof pattern === 'string' ? pattern === origin : pattern.test(origin);
-      });
-
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        console.warn(`CORS blocked request from: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
-      }
+      const isAllowed = allowedOrigins.some(pattern => 
+        pattern instanceof RegExp ? pattern.test(origin) : pattern === origin
+      );
+      if (isAllowed) callback(null, true);
+      else callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
   };
 
-  // Apply CORS to Express
   app.use(cors(corsOptions));
+  app.use(express.json());
+  app.use('/uploads', express.static(UPLOADS_DIR));
 
-  // Apply CORS to Socket.io
+  // --- 2. Socket.io with Shared CORS ---
   const io = new Server(httpServer, {
-    cors: {
-      origin: true, // Dynamically handle origins based on the request
-      methods: ["GET", "POST"],
-      credentials: true
-    }
+    cors: { origin: true, methods: ["GET", "POST"], credentials: true }
   });
 
-  const PORT = process.env.PORT || 3000;
-
-  // --- Socket.io Logic ---
   const userSockets = new Map<string, string>();
   const socketUsers = new Map<string, string>();
 
-  const broadcastOnlineUsers = () => {
-    const onlineUserIds = Array.from(userSockets.keys());
-    io.emit('online_users', onlineUserIds);
-  };
-
   io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
-    
     socket.on('authenticate', (userId: string) => {
       userSockets.set(userId, socket.id);
       socketUsers.set(socket.id, userId);
-      broadcastOnlineUsers();
-    });
-
-    socket.on('join_room', (roomName: string) => socket.join(roomName));
-    socket.on('leave_room', (roomName: string) => socket.leave(roomName));
-
-    socket.on('typing', (data) => {
-      const receiverSocketId = userSockets.get(data.receiver_id);
-      if (receiverSocketId) {
-        io.to(receiverSocketId).emit('user_typing', { sender_id: socketUsers.get(socket.id), listing_id: data.listing_id });
-      }
     });
 
     socket.on('send_message', (data) => {
       const receiverSocketId = userSockets.get(data.receiver_id);
       if (receiverSocketId) io.to(receiverSocketId).emit('new_message', data);
-      const roomName = `chat_${[data.sender_id, data.receiver_id].sort().join('_')}_${data.listing_id}`;
-      socket.to(roomName).emit('new_message', data);
     });
 
     socket.on('disconnect', () => {
       const userId = socketUsers.get(socket.id);
-      if (userId) {
-        userSockets.delete(userId);
-        socketUsers.delete(socket.id);
-        broadcastOnlineUsers();
-      }
+      if (userId) { userSockets.delete(userId); socketUsers.delete(socket.id); }
     });
   });
 
-  // --- Database Seeding ---
-  const seedData = async () => {
+  // --- 3. Updated Auth Middleware (UUID support) ---
+  const authenticate = async (req: any, res: any, next: any) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    
     try {
-      const userCountRes = await pool.query('SELECT COUNT(*) as count FROM users');
-      if (parseInt(userCountRes.rows[0].count) === 0) {
-        console.log('Seeding initial admin user...');
-        await pool.query('INSERT INTO users (id, name, email, role) VALUES ($1, $2, $3, $4)', [
-          '00000000-0000-0000-0000-000000000000', 'Admin User', 'admin@campus.edu', 'admin'
-        ]);
-      }
+      // Decode Supabase JWT - 'sub' is the UUID string
+      const decoded: any = jwt.decode(token);
+      if (!decoded || !decoded.sub) return res.status(401).json({ error: 'Invalid token' });
+      
+      req.user = {
+        id: decoded.sub, 
+        email: decoded.email,
+        role: decoded.user_metadata?.role || 'student'
+      };
+      next();
     } catch (err) {
-      console.error('Seeding error:', err);
+      res.status(401).json({ error: 'Invalid token' });
     }
   };
-  await seedData();
 
-  app.use(express.json());
-  app.use('/uploads', express.static(UPLOADS_DIR));
+  // --- 4. Simplified Routes ---
+  // Notice: /api/auth/sync is REMOVED. Database trigger handles this now.
 
-  // --- Routes ---
-  app.post('/api/auth/sync', async (req, res) => {
-    const { id, name, email, role } = req.body;
+  app.get('/api/listings', async (req, res) => {
     try {
-      await pool.query(
-        'INSERT INTO users (id, name, email, role) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET name = $2, role = $4',
-        [id, name, email, role || 'student']
-      );
-      res.json({ success: true });
+      const result = await pool.query('SELECT * FROM listings WHERE status = $1 ORDER BY created_at DESC', ['available']);
+      res.json(result.rows);
     } catch (err) {
-      res.status(500).json({ error: 'Failed to sync user' });
+      res.status(500).json({ error: 'Database error' });
     }
   });
 
-  // (Include all your other routes here - Listings, User, Admin, Reports, Cart, etc.)
-  // Note: Keep the 'authenticate' middleware and individual API endpoints you have below
+  app.post('/api/listings', authenticate, upload.single('image'), async (req: any, res) => {
+    const { title, description, price, category } = req.body;
+    const image_url = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
+    try {
+      await pool.query(
+        'INSERT INTO listings (seller_id, title, description, price, category, image_url) VALUES ($1, $2, $3, $4, $5, $6)',
+        [req.user.id, title, description, price, category, image_url]
+      );
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to create listing' });
+    }
+  });
 
-  // --- Production Serving ---
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
-    app.use(vite.middlewares);
-  } else {
+  // --- 5. Production Serving ---
+  const PORT = process.env.PORT || 3000;
+  if (process.env.NODE_ENV === 'production') {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));

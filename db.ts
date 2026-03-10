@@ -7,92 +7,32 @@ const { Pool } = pg;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  connectionTimeoutMillis: 5000, // 5 seconds timeout
+  connectionTimeoutMillis: 5000,
   idleTimeoutMillis: 30000,
   max: 20,
-  ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false },
+  // Supabase requires SSL for external connections
+  ssl: process.env.DATABASE_URL?.includes('localhost') 
+    ? false 
+    : { rejectUnauthorized: false },
 });
 
-// Initialize tables
-const initDb = async () => {
-  console.log('Attempting to connect to PostgreSQL...');
-  let client;
+// Just a simple connection check instead of full table initialization
+const checkConnection = async () => {
+  console.log('Attempting to connect to Supabase PostgreSQL...');
   try {
-    client = await pool.connect();
-    console.log('Connected to PostgreSQL successfully');
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id UUID PRIMARY KEY,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        role TEXT DEFAULT 'student',
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS listings (
-        id SERIAL PRIMARY KEY,
-        seller_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL,
-        price REAL NOT NULL,
-        category TEXT NOT NULL,
-        image_url TEXT,
-        status TEXT DEFAULT 'available',
-        sold_count INTEGER DEFAULT 0,
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS messages (
-        id SERIAL PRIMARY KEY,
-        sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        listing_id INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
-        content TEXT NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS cart_items (
-        id SERIAL PRIMARY KEY,
-        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        listing_id INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, listing_id)
-      );
-
-      CREATE TABLE IF NOT EXISTS transactions (
-        id SERIAL PRIMARY KEY,
-        buyer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        listing_id INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
-        amount REAL NOT NULL,
-        status TEXT DEFAULT 'completed',
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS reports (
-        id SERIAL PRIMARY KEY,
-        reporter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        reported_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        reason TEXT NOT NULL,
-        status TEXT DEFAULT 'pending',
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS warnings (
-        id SERIAL PRIMARY KEY,
-        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        message TEXT NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    console.log('PostgreSQL tables initialized');
-  } catch (err) {
-    console.error('Error initializing PostgreSQL tables:', err);
-  } finally {
+    const client = await pool.connect();
+    console.log('Connected to Supabase successfully!');
+    
+    // Quick check to see if our users table is visible
+    const res = await client.query('SELECT COUNT(*) FROM users');
+    console.log(`Current user count in database: ${res.rows[0].count}`);
+    
     client.release();
+  } catch (err) {
+    console.error('Database connection error:', err);
   }
 };
 
-initDb();
+checkConnection();
 
 export default pool;
