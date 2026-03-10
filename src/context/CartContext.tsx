@@ -18,6 +18,7 @@ interface CartContextType {
   clearCart: () => void;
   checkout: () => Promise<void>;
   loading: boolean;
+  fetchCart: () => Promise<void>; // Added to the interface for manual refreshes
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -34,9 +35,18 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     try {
       const response = await api.get('/cart');
-      setCart(response.data);
+      
+      // FIX 1: Strict check to ensure 'cart' ALWAYS stays an array
+      if (response.data && Array.isArray(response.data)) {
+        setCart(response.data);
+      } else {
+        console.warn('Cart API did not return an array:', response.data);
+        setCart([]);
+      }
     } catch (error) {
       console.error('Error fetching cart:', error);
+      // FIX 2: Fallback to empty array on error so UI doesn't crash
+      setCart([]);
     }
   };
 
@@ -77,7 +87,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, removeFromCart, clearCart, checkout, loading }}>
+    <CartContext.Provider value={{ cart, addToCart, removeFromCart, clearCart, checkout, loading, fetchCart }}>
       {children}
     </CartContext.Provider>
   );
