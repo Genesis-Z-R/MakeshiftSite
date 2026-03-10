@@ -115,21 +115,29 @@ async function startServer() {
     }
   });
 
-  app.post('/api/listings', authenticate, upload.single('image'), async (req: any, res) => {
-    const { title, description, price, category } = req.body;
-    const image_url = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
-    try {
-      await pool.query(
-        'INSERT INTO listings (seller_id, title, description, price, category, image_url, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-        [req.user.id, title, description, parseFloat(price), category, image_url, 'available']
-      );
-      res.json({ success: true });
-    } catch (err) {
-      console.error('Listing Post Error:', err);
-      res.status(500).json({ error: 'Failed to create listing' });
-    }
-  });
+ app.post('/api/listings', authenticate, upload.single('image'), async (req: any, res) => {
+  const { title, description, price, category } = req.body;
+  
+  // Use the UUID from the decoded JWT
+  const seller_id = req.user.id; 
+  
+  // Convert price to a number so PostgreSQL 'numeric' type is happy
+  const numericPrice = parseFloat(price);
 
+  // If a file was uploaded, use the local path; otherwise, use the URL string
+  const image_url = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
+
+  try {
+    await pool.query(
+      'INSERT INTO listings (seller_id, title, description, price, category, image_url, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [seller_id, title, description, numericPrice, category, image_url, 'available']
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Listing Post Error:', err.message);
+    res.status(500).json({ error: 'Failed to create listing. Check server logs.' });
+  }
+});
   // --- 6. Cart & Checkout Routes (Fixes HTML response error) ---
   app.get('/api/cart', authenticate, async (req: any, res) => {
     try {
