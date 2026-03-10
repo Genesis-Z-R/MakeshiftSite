@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { User as SupabaseUser } from '@supabase/supabase-js';
-import api from '../services/api';
+
+// Note: Removed 'api' import since we no longer need the sync call here
 
 interface User {
   id: string;
@@ -33,7 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Check active sessions and sets the user
+    // Initial session check
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(mapUser(session?.user ?? null));
       if (session?.access_token) {
@@ -42,21 +43,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     });
 
-    // Listen for changes on auth state (logged in, signed out, etc.)
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const mappedUser = mapUser(session?.user ?? null);
       setUser(mappedUser);
       
       if (session?.access_token) {
         localStorage.setItem('token', session.access_token);
-        // Sync with backend
-        if (mappedUser) {
-          try {
-            await api.post('/auth/sync', mappedUser);
-          } catch (err) {
-            console.error('Failed to sync user with backend:', err);
-          }
-        }
+        // The manual axios/api sync call is removed. 
+        // Your Supabase SQL Trigger handles the 'public.users' table automatically now.
       } else {
         localStorage.removeItem('token');
       }

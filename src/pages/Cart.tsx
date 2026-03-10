@@ -14,7 +14,8 @@ const Cart: React.FC = () => {
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
   const navigate = useNavigate();
 
-  const total = cart.reduce((sum, item) => sum + item.price, 0);
+  // FIX 1: Safe reduce calculation to prevent "t.reduce is not a function"
+  const total = Array.isArray(cart) ? cart.reduce((sum, item) => sum + item.price, 0) : 0;
 
   const handleCheckout = async () => {
     setError('');
@@ -23,12 +24,13 @@ const Cart: React.FC = () => {
       announce('Purchase completed successfully! Redirecting to your profile.');
       navigate('/profile');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Checkout failed');
       announce(`Checkout failed: ${err.message}`, 'assertive');
     }
   };
 
   const handleRemoveItem = (id: number) => {
+    if (!Array.isArray(cart)) return;
     const item = cart.find(i => i.id === id);
     removeFromCart(id);
     setItemToRemove(null);
@@ -37,7 +39,8 @@ const Cart: React.FC = () => {
     }
   };
 
-  if (cart.length === 0) {
+  // FIX 2: Safe check for empty cart
+  if (!cart || cart.length === 0) {
     return (
       <main className="max-w-4xl mx-auto px-4 py-20 text-center">
         <div className="bg-white dark:bg-slate-900 p-12 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 transition-colors duration-200">
@@ -75,7 +78,8 @@ const Cart: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         {/* Cart Items */}
         <section className="lg:col-span-2 space-y-6" aria-label="Items in your cart">
-          {cart.map((item, idx) => (
+          {/* FIX 3: Optional chaining on map */}
+          {cart?.map((item, idx) => (
             <div
               key={`cart-item-${item.id}-${idx}`}
               className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex gap-6 group hover:shadow-md transition-all duration-200"
@@ -100,7 +104,8 @@ const Cart: React.FC = () => {
                       <Trash2 className="h-5 w-5" aria-hidden="true" />
                     </button>
                   </div>
-                  <p className="text-indigo-600 dark:text-indigo-400 font-bold text-lg">${item.price.toFixed(2)}</p>
+                  {/* Currency updated to GH₵ */}
+                  <p className="text-indigo-600 dark:text-indigo-400 font-bold text-lg">GH₵{item.price.toFixed(2)}</p>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                   <Package className="h-4 w-4" aria-hidden="true" />
@@ -119,15 +124,15 @@ const Cart: React.FC = () => {
             <div className="space-y-4 mb-8">
               <div className="flex justify-between text-slate-600 dark:text-slate-400">
                 <span>Subtotal</span>
-                <span>${total.toFixed(2)}</span>
+                <span>GH₵{total.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-slate-600 dark:text-slate-400">
                 <span>Service Fee</span>
-                <span>$0.00</span>
+                <span>GH₵0.00</span>
               </div>
               <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
                 <span className="text-lg font-bold text-slate-900 dark:text-slate-50">Total</span>
-                <span className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">${total.toFixed(2)}</span>
+                <span className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">GH₵{total.toFixed(2)}</span>
               </div>
             </div>
 
@@ -165,10 +170,6 @@ const Cart: React.FC = () => {
                 </div>
               </div>
             )}
-
-            <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-6">
-              Secure checkout powered by CampusMarket
-            </p>
           </div>
         </aside>
       </div>
@@ -188,7 +189,7 @@ const Cart: React.FC = () => {
         onClose={() => setShowCheckoutConfirm(false)}
         onConfirm={handleCheckout}
         title="Complete Purchase"
-        message={`You are about to purchase ${cart.length} item(s) for a total of $${total.toFixed(2)}. This is a simulated transaction.`}
+        message={`You are about to purchase ${cart?.length} item(s) for a total of GH₵${total.toFixed(2)}. This is a simulated transaction.`}
         confirmText="Confirm Purchase"
       />
     </main>
