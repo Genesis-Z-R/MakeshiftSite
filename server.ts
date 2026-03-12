@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js';
 import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
@@ -7,24 +8,17 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
 
 dotenv.config();
 
+// --- Supabase Client ---
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!
+);
+
 // --- 1. File Upload Configuration ---
-const UPLOADS_DIR = process.env.UPLOADS_PATH || path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 async function startServer() {
@@ -53,11 +47,20 @@ async function startServer() {
   }));
 
   app.use(express.json());
-  app.use('/uploads', express.static(UPLOADS_DIR));
 
   // --- 3. Socket.io for Real-time Chat ---
   const io = new Server(httpServer, {
-    cors: { origin: true, methods: ["GET", "POST"], credentials: true }
+    cors: { 
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.some(p => p instanceof RegExp ? p.test(origin) : p === origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('CORS blocked by server'));
+        }
+      }, 
+      methods: ["GET", "POST"], 
+      credentials: true 
+    }
   });
 
   const userSockets = new Map<string, string>();
@@ -117,20 +120,42 @@ async function startServer() {
 
  app.post('/api/listings', authenticate, upload.single('image'), async (req: any, res) => {
   const { title, description, price, category } = req.body;
-  
-  // Use the UUID from the decoded JWT
-  const seller_id = req.user.id; 
-  
-  // Convert price to a number so PostgreSQL 'numeric' type is happy
+  const seller_id = req.user.id;
   const numericPrice = parseFloat(price);
 
-  // If a file was uploaded, use the local path; otherwise, use the URL string
-  const image_url = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
+  let imageUrl = req.body.image_url || '';
 
   try {
+    // If a file is uploaded, handle Supabase upload
+    if (req.file) {
+      const file = req.file;
+      const fileName = `${Date.now()}-${file.originalname}`;
+      const bucket = 'listing-images';
+
+      const { data, error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, file.buffer, {
+          contentType: file.mimetype,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+      
+      const { data: publicUrlData } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(fileName);
+
+      if (!publicUrlData) {
+        throw new Error('Could not get public URL for the uploaded image.');
+      }
+      imageUrl = publicUrlData.publicUrl;
+    }
+
+    // Insert listing into the database
     await pool.query(
-      'INSERT INTO listings (seller_id, title, description, price, category, image_url, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-      [seller_id, title, description, numericPrice, category, image_url, 'available']
+      'INSERT INTO listings (seller_id, title, description, price, category, image_url, status) VALUES (, $2, $3, $4, $5, $6, $7)',
+      [seller_id, title, description, numericPrice, category, imageUrl, 'available']
     );
     res.json({ success: true });
   } catch (err: any) {
