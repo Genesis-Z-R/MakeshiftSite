@@ -28,37 +28,50 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [typingUsers, setTypingUsers] = useState<Map<string, boolean>>(new Map());
 
   useEffect(() => {
-    const newSocket = io(import.meta.env.VITE_API_URL || undefined);
-    setSocket(newSocket);
+  // 1. We specify the backend URL
+  // 2. We add configuration options to match the backend 'transports'
+  const newSocket = io(import.meta.env.VITE_API_URL || undefined, {
+    transports: ['websocket', 'polling'], // Explicitly allow both
+    withCredentials: true,
+    autoConnect: true,
+    reconnectionAttempts: 5
+  });
 
-    newSocket.on('online_users', (users: string[]) => {
-      setOnlineUsers(users);
+  setSocket(newSocket);
+
+  // Error handling to help us debug if it still fails
+  newSocket.on('connect_error', (err) => {
+    console.error('Socket connection error:', err.message);
+  });
+
+  newSocket.on('online_users', (users: string[]) => {
+    setOnlineUsers(users);
+  });
+
+  newSocket.on('user_typing', (data: { sender_id: string; listing_id: number }) => {
+    setTypingUsers(prev => {
+      const next = new Map(prev);
+      next.set(`${data.sender_id}_${data.listing_id}`, true);
+      return next;
     });
+  });
 
-    newSocket.on('user_typing', (data: { sender_id: string; listing_id: number }) => {
-      setTypingUsers(prev => {
-        const next = new Map(prev);
-        next.set(`${data.sender_id}_${data.listing_id}`, true);
-        return next;
-      });
+  newSocket.on('user_stop_typing', (data: { sender_id: string; listing_id: number }) => {
+    setTypingUsers(prev => {
+      const next = new Map(prev);
+      next.delete(`${data.sender_id}_${data.listing_id}`);
+      return next;
     });
+  });
 
-    newSocket.on('user_stop_typing', (data: { sender_id: string; listing_id: number }) => {
-      setTypingUsers(prev => {
-        const next = new Map(prev);
-        next.delete(`${data.sender_id}_${data.listing_id}`);
-        return next;
-      });
-    });
+  newSocket.on('new_message', () => {
+    setNotifications(prev => prev + 1);
+  });
 
-    newSocket.on('new_message', () => {
-      setNotifications(prev => prev + 1);
-    });
-
-    return () => {
-      newSocket.disconnect();
-    };
-  }, []);
+  return () => {
+    newSocket.disconnect();
+  };
+}, []);
 
   const clearNotifications = () => setNotifications(0);
 

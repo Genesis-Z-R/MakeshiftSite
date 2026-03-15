@@ -31,16 +31,24 @@ async function startServer() {
   const app = express();
   const httpServer = createServer(app);
   
-  // FIX: Permissive Socket.io config to stop 400 errors
-  const io = new Server(httpServer, {
-    cors: {
-      origin: ["https://makeshift-site.vercel.app", "http://localhost:5173", /\.vercel\.app$/],
-      methods: ["GET", "POST"],
-      credentials: true
-    },
-    transports: ['websocket', 'polling'],
-    allowEIO3: true
-  });
+ 
+
+const io = new Server(httpServer, {
+  cors: {
+    // This must include your specific Vercel URL
+    origin: [
+      "https://makeshift-site.vercel.app", 
+      "http://localhost:5173",
+      /\.vercel\.app$/ // This regex allows all Vercel preview deployments
+    ],
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  // We explicitly define transports to stop the polling/upgrade cycle errors
+  transports: ['websocket', 'polling'],
+  // allowEIO3 helps if there's a version mismatch between client and server
+  allowEIO3: true 
+});
 
   const userSockets = new Map<string, string>();
   const socketUsers = new Map<string, string>();
