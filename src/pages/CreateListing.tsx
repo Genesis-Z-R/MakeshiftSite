@@ -10,13 +10,27 @@ const CreateListing: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [category, setCategory] = useState('Textbooks');
+  
+  // Updated default category and list to match Home.tsx exactly
+  const [category, setCategory] = useState('Electronics');
+  const categories = [
+    'Electronics',
+    'Fashion',
+    'Home & Living',
+    'Books & Stationery',
+    'Health & Beauty',
+    'Food & Groceries',
+    'Services',
+    'Sports & Fitness',
+    'Vehicles & Transport',
+    'Other'
+  ];
+
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  // Cropper state
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
@@ -26,8 +40,6 @@ const CreateListing: React.FC = () => {
   const { announce } = useAccessibility();
   const navigate = useNavigate();
 
-  const categories = ['Textbooks', 'Electronics', 'Furniture', 'Clothing', 'Sports', 'Books', 'Services', 'Other'];
-
   const onCropComplete = useCallback((_croppedArea: any, croppedAreaPixels: any) => {
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
@@ -35,34 +47,34 @@ const CreateListing: React.FC = () => {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Image size must be less than 5MB');
+        return;
+      }
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onload = () => {
         setRawImage(reader.result as string);
         setShowCropper(true);
-        announce('Image selected. Please crop your image.');
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleCropConfirm = async () => {
-    if (!rawImage || !croppedAreaPixels) return;
-    
     try {
       setLoading(true);
-      const croppedBlob = await getCroppedImg(rawImage, croppedAreaPixels);
-      if (croppedBlob) {
-        const croppedFile = new File([croppedBlob], 'cropped-image.jpg', { type: 'image/jpeg' });
-        setImageFile(croppedFile);
-        
-        const previewUrl = URL.createObjectURL(croppedBlob);
-        setImagePreview(previewUrl);
-        setShowCropper(false);
-        announce('Image cropped successfully.');
-      }
+      const croppedImage = await getCroppedImg(rawImage!, croppedAreaPixels);
+      
+      const response = await fetch(croppedImage);
+      const blob = await response.blob();
+      const file = new File([blob], 'listing-image.jpg', { type: 'image/jpeg' });
+      
+      setImageFile(file);
+      setImagePreview(croppedImage);
+      setShowCropper(false);
     } catch (e) {
       console.error(e);
-      setError('Failed to crop image.');
+      setError('Failed to crop image');
     } finally {
       setLoading(false);
     }
@@ -70,206 +82,199 @@ const CreateListing: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!imageFile) {
+      setError('Please upload an image');
+      return;
+    }
+
     setLoading(true);
     setError('');
-    try {
-      const formData = new FormData();
-      formData.append('title', title);
-      formData.append('description', description);
-      formData.append('price', price);
-      formData.append('category', category);
-      if (imageFile) {
-        formData.append('image', imageFile);
-      }
+    announce('Creating listing...');
 
-      const response = await api.post('/listings', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('description', description);
+    formData.append('price', price);
+    formData.append('category', category);
+    formData.append('image', imageFile);
+
+    try {
+      await api.post('/listings', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
-      announce('Listing created successfully!');
-      navigate(`/listing/${response.data.id}`);
+      announce('Listing created successfully');
+      navigate('/');
     } catch (err: any) {
-      const msg = 'Failed to create listing. Please try again.';
-      setError(msg);
-      announce(msg, 'assertive');
+      setError(err.response?.data?.error || 'Failed to create listing');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-12">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden transition-colors duration-200">
-        <header className="bg-indigo-600 px-8 py-10 text-white">
-          <h1 className="text-3xl font-bold mb-2">Create New Listing</h1>
-          <p className="text-indigo-100">Fill in the details below to post your item.</p>
+    <div className="min-h-screen bg-slate-50 dark:bg-black py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto">
+        <header className="mb-10 text-center">
+          <div className="inline-flex p-4 bg-indigo-600 rounded-[2rem] shadow-lg shadow-indigo-200 dark:shadow-none mb-6">
+            <Package className="h-8 w-8 text-white" />
+          </div>
+          <h1 className="text-4xl font-black text-slate-900 dark:text-slate-50 tracking-tight mb-2">Create New Listing</h1>
+          <p className="text-slate-500 dark:text-slate-400 font-bold">List your item for the campus community</p>
         </header>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+        <div className="bg-white dark:bg-slate-900 rounded-[3rem] shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 p-8 sm:p-12 overflow-hidden">
           {error && (
-            <div id="form-error" className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-xl flex items-center gap-2" role="alert">
-              <AlertCircle className="h-5 w-5" aria-hidden="true" />
-              <span className="text-sm font-medium">{error}</span>
+            <div className="mb-8 p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 font-bold animate-shake">
+              <AlertCircle className="h-5 w-5" />
+              <p>{error}</p>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="md:col-span-2">
-              <label htmlFor="title" className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Item Title</label>
-              <div className="relative">
-                <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" aria-hidden="true" />
-                <input
-                  id="title"
-                  type="text"
-                  required
-                  className="input-field pl-10"
-                  placeholder="e.g. Calculus 101 Textbook"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  aria-describedby={error ? "form-error" : undefined}
-                />
-              </div>
-            </div>
+          <form onSubmit={handleSubmit} className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-black text-slate-900 dark:text-slate-50 uppercase tracking-widest px-1">Item Title</label>
+                  <div className="relative group">
+                    <Package className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+                    <input
+                      required
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className="w-full h-14 pl-12 pr-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none text-slate-900 dark:text-slate-50 font-bold focus:ring-2 focus:ring-indigo-500 transition-all"
+                      placeholder="e.g., iPhone 13 Pro"
+                    />
+                  </div>
+                </div>
 
-            <div>
-              <label htmlFor="price" className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Price ($)</label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" aria-hidden="true" />
-                <input
-                  id="price"
-                  type="number"
-                  required
-                  step="0.01"
-                  className="input-field pl-10"
-                  placeholder="0.00"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  aria-describedby={error ? "form-error" : undefined}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="category" className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Category</label>
-              <div className="relative">
-                <List className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" aria-hidden="true" />
-                <select
-                  id="category"
-                  className="input-field pl-10 appearance-none bg-white dark:bg-slate-900"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                >
-                  {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="md:col-span-2">
-              <label htmlFor="image-upload" className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Item Image</label>
-              <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-8 hover:border-indigo-500 dark:hover:border-indigo-400 transition-all cursor-pointer relative group">
-                {imagePreview ? (
-                  <div className="relative w-full max-h-64 rounded-xl overflow-hidden">
-                    <img src={imagePreview} alt="Preview of uploaded item" className="w-full h-full object-contain" />
-                    <button
-                      type="button"
-                      onClick={() => { setImageFile(null); setImagePreview(null); announce('Image removed.'); }}
-                      className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full shadow-lg hover:bg-red-600 transition-all"
-                      aria-label="Remove image"
+                <div className="space-y-2">
+                  <label className="text-sm font-black text-slate-900 dark:text-slate-50 uppercase tracking-widest px-1">Category</label>
+                  <div className="relative group">
+                    <List className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full h-14 pl-12 pr-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none text-slate-900 dark:text-slate-50 font-bold focus:ring-2 focus:ring-indigo-500 transition-all appearance-none"
                     >
-                      <X className="h-5 w-5" aria-hidden="true" />
-                    </button>
+                      {categories.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
                   </div>
-                ) : (
-                  <div className="text-center">
-                    <ImageIcon className="h-12 w-12 text-slate-400 mx-auto mb-4 group-hover:text-indigo-500 transition-all" aria-hidden="true" />
-                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Click to upload or drag and drop</p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">PNG, JPG, GIF up to 10MB</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-black text-slate-900 dark:text-slate-50 uppercase tracking-widest px-1">Price (GH₵)</label>
+                  <div className="relative group">
+                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+                    <input
+                      required
+                      type="number"
+                      step="0.01"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      className="w-full h-14 pl-12 pr-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none text-slate-900 dark:text-slate-50 font-bold focus:ring-2 focus:ring-indigo-500 transition-all"
+                      placeholder="0.00"
+                    />
                   </div>
-                )}
-                <input
-                  id="image-upload"
-                  type="file"
-                  accept="image/*"
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  onChange={handleImageChange}
-                  aria-label="Upload item image"
-                />
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-black text-slate-900 dark:text-slate-50 uppercase tracking-widest px-1">Item Image</label>
+                  <div className={`relative aspect-square rounded-[2.5rem] overflow-hidden border-4 border-dashed transition-all duration-300 ${
+                    imagePreview ? 'border-indigo-600 bg-white' : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800'
+                  }`}>
+                    {imagePreview ? (
+                      <>
+                        <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => { setImageFile(null); setImagePreview(null); }}
+                          className="absolute top-4 right-4 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-lg"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </>
+                    ) : (
+                      <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer group">
+                        <div className="p-4 bg-white dark:bg-slate-700 rounded-2xl shadow-sm mb-4 group-hover:scale-110 transition-transform">
+                          <ImageIcon className="h-8 w-8 text-indigo-600" />
+                        </div>
+                        <span className="text-slate-900 dark:text-slate-50 font-black">Tap to upload</span>
+                        <span className="text-xs text-slate-400 font-bold mt-1">PNG, JPG up to 5MB</span>
+                        <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                      </label>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="md:col-span-2">
-              <label htmlFor="description" className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Description</label>
+            <div className="space-y-2 pt-4">
+              <label className="text-sm font-black text-slate-900 dark:text-slate-50 uppercase tracking-widest px-1">Description</label>
               <textarea
-                id="description"
                 required
-                rows={5}
-                className="input-field p-4 resize-none"
-                placeholder="Describe your item's condition, features, etc."
+                rows={4}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-              ></textarea>
+                className="w-full p-6 rounded-[2rem] bg-slate-50 dark:bg-slate-800 border-none text-slate-900 dark:text-slate-50 font-bold focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                placeholder="Tell buyers about the condition, age, and any flaws..."
+              />
             </div>
-          </div>
 
-          <div className="flex gap-4 pt-4">
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              className="btn-secondary flex-1 py-4 border border-slate-200 dark:border-slate-700"
-            >
-              Cancel
-            </button>
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary flex-1 py-4 shadow-lg shadow-indigo-100 dark:shadow-none"
+              className="w-full h-16 bg-indigo-600 text-white rounded-[2rem] text-lg font-black hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-indigo-200 dark:shadow-none transition-all duration-300 transform active:scale-95 flex items-center justify-center gap-3"
             >
-              {loading ? 'Posting...' : 'Post Listing'}
+              {loading ? (
+                <div className="h-6 w-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <>
+                  <Check className="h-6 w-6" />
+                  Launch Listing
+                </>
+              )}
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
 
-      {/* Cropper Modal */}
+      {/* Image Cropper Modal */}
       {showCropper && rawImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[80vh]">
-            <header className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Crop className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-50">Crop Image</h2>
-              </div>
-              <button 
-                onClick={() => setShowCropper(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-              >
-                <X className="h-6 w-6" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/95 backdrop-blur-sm p-4 sm:p-8">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl flex flex-col">
+            <header className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+              <h2 className="text-xl font-black text-slate-900 dark:text-slate-50">Crop Listing Image</h2>
+              <button onClick={() => setShowCropper(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full">
+                <X className="h-6 w-6 text-slate-400" />
               </button>
             </header>
             
-            <div className="relative flex-grow bg-slate-100 dark:bg-slate-950">
+            <div className="relative flex-grow bg-black h-[400px]">
               <Cropper
                 image={rawImage}
                 crop={crop}
                 zoom={zoom}
-                aspect={4 / 3}
+                aspect={1}
                 onCropChange={setCrop}
                 onCropComplete={onCropComplete}
                 onZoomChange={setZoom}
               />
             </div>
-            
-            <footer className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex flex-col gap-4">
+
+            <footer className="p-8 space-y-6">
               <div className="flex items-center gap-4">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Zoom</span>
+                <Crop className="h-5 w-5 text-slate-400" />
                 <input
                   type="range"
                   value={zoom}
                   min={1}
                   max={3}
                   step={0.1}
-                  aria-labelledby="Zoom"
                   onChange={(e) => setZoom(Number(e.target.value))}
                   className="flex-grow h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                 />
