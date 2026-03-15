@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
 import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
@@ -8,66 +7,48 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
+import axios from 'axios';
 
 dotenv.config();
 
-// --- Supabase Client ---
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-);
+const JWT_SECRET = process.env.JWT_SECRET || 'campus-secret-key';
+const UPLOADS_DIR = process.env.UPLOADS_PATH || path.join(process.cwd(), 'uploads');
 
-// --- 1. File Upload Configuration ---
-const storage = multer.memoryStorage();
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
 const upload = multer({ storage });
 
 async function startServer() {
   const app = express();
   const httpServer = createServer(app);
-
-  // --- 2. Robust CORS Configuration ---
-  const allowedOrigins = [
-    process.env.FRONTEND_URL,
-    'https://makeshift-site.vercel.app',
-    'https://makeshiftsite-production.up.railway.app',
-    /\.vercel\.app$/ 
-  ];
-
-  app.use(cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.some(p => p instanceof RegExp ? p.test(origin) : p === origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('CORS blocked by server'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-  }));
-
-  app.use(express.json());
-
-  // --- 3. Socket.io for Real-time Chat ---
+  
+  // FIX: Support string UUIDs for socket mapping
   const io = new Server(httpServer, {
-    cors: { 
-      origin: (origin, callback) => {
-        if (!origin || allowedOrigins.some(p => p instanceof RegExp ? p.test(origin) : p === origin)) {
-          callback(null, true);
-        } else {
-          callback(new Error('CORS blocked by server'));
-        }
-      }, 
-      methods: ["GET", "POST"], 
-      credentials: true 
+    cors: {
+      origin: process.env.FRONTEND_URL || "*",
+      methods: ["GET", "POST"],
+      credentials: true
     }
   });
 
-  const userSockets = new Map<string, string>();
+  const userSockets = new Map<string, string>(); // userId (UUID) -> socketId
+  const socketUsers = new Map<string, string>(); // socketId -> userId (UUID)
 
   io.on('connection', (socket) => {
     socket.on('authenticate', (userId: string) => {
       userSockets.set(userId, socket.id);
+      socketUsers.set(socket.id, userId);
     });
 
     socket.on('send_message', (data) => {
@@ -76,105 +57,98 @@ async function startServer() {
     });
 
     socket.on('disconnect', () => {
-      for (const [userId, socketId] of userSockets.entries()) {
-        if (socketId === socket.id) userSockets.delete(userId);
+      const userId = socketUsers.get(socket.id);
+      if (userId) {
+        userSockets.delete(userId);
+        socketUsers.delete(socket.id);
       }
     });
   });
 
-  // --- 4. Auth Middleware (Supabase JWT/UUID Support) ---
-  const authenticate = async (req: any, res: any, next: any) => {
+  app.use(cors({
+    origin: process.env.FRONTEND_URL || "*",
+    credentials: true
+  }));
+  app.use(express.json());
+  app.use('/uploads', express.static(UPLOADS_DIR));
+
+  // Middleware to verify JWT and handle UUID sub
+  const authenticate = (req: any, res: any, next: any) => {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
-    
     try {
-      const decoded: any = jwt.decode(token);
-      if (!decoded || !decoded.sub) return res.status(401).json({ error: 'Invalid token' });
-      
-      req.user = {
-        id: decoded.sub, // This is the UUID string
-        email: decoded.email
-      };
+      // For Supabase/Google Auth, we often use jwt.decode or verify against their secret
+      const decoded: any = jwt.verify(token, JWT_SECRET);
+      req.user = { id: decoded.id || decoded.sub, email: decoded.email, role: decoded.role };
       next();
     } catch (err) {
       res.status(401).json({ error: 'Invalid token' });
     }
   };
 
-  // --- 5. Listings Routes ---
+  // --- Listing Routes ---
   app.get('/api/listings', async (req, res) => {
+    const { search, category, sort, limit = 12, offset = 0, seller_id } = req.query;
+    
+    // JOIN users to get seller_name
+    let query = "SELECT listings.*, users.name as seller_name FROM listings JOIN users ON listings.seller_id = users.id";
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (seller_id) {
+      query += ` WHERE seller_id = $${paramIndex}`;
+      params.push(seller_id);
+      paramIndex++;
+    } else {
+      query += " WHERE status = 'available'";
+    }
+
+    if (category && category !== 'All') {
+      query += ` AND category = $${paramIndex}`;
+      params.push(category);
+      paramIndex++;
+    }
+
+    if (sort === 'price_low') query += ' ORDER BY price ASC';
+    else if (sort === 'price_high') query += ' ORDER BY price DESC';
+    else query += ' ORDER BY created_at DESC';
+
+    query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(Number(limit), Number(offset));
+
     try {
-      const result = await pool.query(`
-        SELECT l.*, u.name AS seller_name 
-        FROM listings l
-        JOIN users u ON l.seller_id = u.id
-        WHERE l.status = 'available'
-        ORDER BY l.created_at DESC
-      `);
-      res.json(result.rows || []);
+      const result = await pool.query(query, params);
+      res.json(result.rows || []); // Always return array
     } catch (err) {
-      console.error('Listings Fetch Error:', err);
-      res.status(500).json([]); // Returns array to prevent frontend .map crash
+      res.status(500).json([]); // Defensive: prevent frontend .map crash
     }
   });
 
- app.post('/api/listings', authenticate, upload.single('image'), async (req: any, res) => {
-  const { title, description, price, category } = req.body;
-  const seller_id = req.user.id;
-  const numericPrice = parseFloat(price);
-
-  let imageUrl = req.body.image_url || '';
-
-  try {
-    // If a file is uploaded, handle Supabase upload
-    if (req.file) {
-      const file = req.file;
-      const fileName = `${Date.now()}-${file.originalname}`;
-      const bucket = 'listing-images';
-
-      const { data, error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(fileName, file.buffer, {
-          contentType: file.mimetype,
-        });
-
-      if (uploadError) {
-        throw uploadError;
-      }
-      
-      const { data: publicUrlData } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(fileName);
-
-      if (!publicUrlData) {
-        throw new Error('Could not get public URL for the uploaded image.');
-      }
-      imageUrl = publicUrlData.publicUrl;
+  app.post('/api/listings', authenticate, upload.single('image'), async (req: any, res) => {
+    const { title, description, price, category } = req.body;
+    const image_url = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
+    try {
+      const result = await pool.query(
+        'INSERT INTO listings (seller_id, title, description, price, category, image_url, status) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+        [req.user.id, title, description, parseFloat(price), category, image_url, 'available']
+      );
+      res.json({ id: result.rows[0].id });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to create listing' });
     }
+  });
 
-    // Insert listing into the database
-    await pool.query(
-      'INSERT INTO listings (seller_id, title, description, price, category, image_url, status) VALUES (, $2, $3, $4, $5, $6, $7)',
-      [seller_id, title, description, numericPrice, category, imageUrl, 'available']
-    );
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error('Listing Post Error:', err.message);
-    res.status(500).json({ error: 'Failed to create listing. Check server logs.' });
-  }
-});
-  // --- 6. Cart & Checkout Routes (Fixes HTML response error) ---
+  // --- Cart Routes (Renamed to 'cart_items' to match your db.ts) ---
   app.get('/api/cart', authenticate, async (req: any, res) => {
     try {
       const result = await pool.query(`
-        SELECT c.id, l.id as listing_id, l.title, l.price, l.image_url 
-        FROM cart c
-        JOIN listings l ON c.listing_id = l.id
-        WHERE c.user_id = $1
+        SELECT cart_items.id, listings.id as listing_id, listings.title, listings.price, listings.image_url, listings.status
+        FROM cart_items
+        JOIN listings ON cart_items.listing_id = listings.id
+        WHERE cart_items.user_id = $1
       `, [req.user.id]);
       res.json(result.rows || []);
     } catch (err) {
-      console.error('Cart Fetch Error:', err);
       res.status(500).json([]);
     }
   });
@@ -182,74 +156,46 @@ async function startServer() {
   app.post('/api/cart', authenticate, async (req: any, res) => {
     const { listing_id } = req.body;
     try {
-      await pool.query('INSERT INTO cart (user_id, listing_id) VALUES ($1, $2)', [req.user.id, listing_id]);
+      await pool.query('INSERT INTO cart_items (user_id, listing_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, listing_id]);
       res.json({ success: true });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to add to cart' });
+      res.status(400).json({ error: 'Failed to add to cart' });
     }
   });
 
   app.delete('/api/cart/:id', authenticate, async (req: any, res) => {
     try {
-      await pool.query('DELETE FROM cart WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+      await pool.query('DELETE FROM cart_items WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: 'Failed to remove from cart' });
     }
   });
 
-  app.post('/api/checkout', authenticate, async (req: any, res) => {
-    try {
-      // Logic: Clear user's cart upon checkout
-      await pool.query('DELETE FROM cart WHERE user_id = $1', [req.user.id]);
-      res.json({ success: true });
-    } catch (err) {
-      res.status(500).json({ error: 'Checkout failed' });
-    }
-  });
-
-  // --- 7. Messages & Reports Routes ---
+  // --- Message Routes (Fixed for UUIDs) ---
   app.get('/api/messages', authenticate, async (req: any, res) => {
     try {
       const result = await pool.query(`
-        SELECT m.*, l.title as listing_title, 
-               u1.name as sender_name, u2.name as receiver_name
-        FROM messages m
-        JOIN listings l ON m.listing_id = l.id
-        JOIN users u1 ON m.sender_id = u1.id
-        JOIN users u2 ON m.receiver_id = u2.id
-        WHERE m.sender_id = $1 OR m.receiver_id = $1
-        ORDER BY m.created_at DESC
+        SELECT messages.*, u1.name as sender_name, u2.name as receiver_name, listings.title as listing_title
+        FROM messages
+        JOIN users u1 ON messages.sender_id = u1.id
+        JOIN users u2 ON messages.receiver_id = u2.id
+        JOIN listings ON messages.listing_id = listings.id
+        WHERE sender_id = $1 OR receiver_id = $1
+        ORDER BY created_at DESC
       `, [req.user.id]);
       res.json(result.rows || []);
     } catch (err) {
-      console.error('Messages Error:', err);
       res.status(500).json([]);
     }
   });
 
-  app.post('/api/reports', authenticate, async (req: any, res) => {
-    const { reported_id, reason } = req.body;
-    try {
-      await pool.query(
-        'INSERT INTO reports (reporter_id, reported_id, reason) VALUES ($1, $2, $3)',
-        [req.user.id, reported_id, reason]
-      );
-      res.json({ success: true });
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to submit report' });
-    }
-  });
-
-  // --- 8. Production Config & SPAs ---
+  // --- Production Serving ---
   const PORT = process.env.PORT || 3000;
   if (process.env.NODE_ENV === 'production') {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(process.cwd(), 'frontend/dist');
     app.use(express.static(distPath));
-    // Catch-all for React Router - must stay at the bottom
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
   }
 
   httpServer.listen(PORT, '0.0.0.0', () => {
