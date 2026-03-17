@@ -31,7 +31,7 @@ async function startServer() {
   const app = express();
   const httpServer = createServer(app);
   
-  // FIX: Permissive Socket.io config to stop 400 errors and CORS blocks
+  // FIX: Socket.io configuration to stop 400 loops
   const io = new Server(httpServer, {
     cors: {
       origin: ["https://makeshift-site.vercel.app", "http://localhost:5173", /\.vercel\.app$/],
@@ -49,6 +49,13 @@ async function startServer() {
     socket.on('authenticate', (userId: string) => {
       userSockets.set(userId, socket.id);
       socketUsers.set(socket.id, userId);
+    });
+
+    socket.on('send_message', (data) => {
+      const receiverSocketId = userSockets.get(data.receiver_id);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit('new_message', data);
+      }
     });
 
     socket.on('disconnect', () => {
@@ -85,19 +92,13 @@ async function startServer() {
     }
   };
 
-  // --- Listing Routes ---
+  // --- LISTING ROUTES ---
 
   // 1. Get All Listings (FIXED: Dynamic parameters and LEFT JOIN)
   app.get('/api/listings', async (req, res) => {
     try {
       const { search, category, seller_id, limit = 12, offset = 0 } = req.query;
-      
-      let query = `
-        SELECT l.*, COALESCE(u.name, 'Campus Seller') as seller_name 
-        FROM listings l 
-        LEFT JOIN users u ON l.seller_id = u.id
-      `;
-      
+      let query = `SELECT l.*, COALESCE(u.name, 'Campus Seller') as seller_name FROM listings l LEFT JOIN users u ON l.seller_id = u.id`;
       const params: any[] = [];
       const conditions: string[] = [];
 
@@ -118,64 +119,44 @@ async function startServer() {
         conditions.push(`(l.title ILIKE $${params.length} OR l.description ILIKE $${params.length})`);
       }
 
-      if (conditions.length > 0) {
-        query += " WHERE " + conditions.join(" AND ");
-      }
-
+      if (conditions.length > 0) query += " WHERE " + conditions.join(" AND ");
       query += ` ORDER BY l.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
       params.push(Number(limit), Number(offset));
 
       const result = await pool.query(query, params);
       res.json(result.rows || []);
-
     } catch (err: any) {
       console.error('DATABASE ERROR:', err.message);
       res.status(200).json([]); 
     }
   });
 
-  // 2. Get Single Listing (NEW: Fixes the blank page issue)
+  // 2. Get Single Listing (FIXED: Handles specific ID lookup)
   app.get('/api/listings/:id', async (req, res) => {
     try {
-      const { id } = req.params;
       const result = await pool.query(`
         SELECT l.*, COALESCE(u.name, 'Campus Seller') as seller_name 
-        FROM listings l 
-        LEFT JOIN users u ON l.seller_id = u.id 
-        WHERE l.id = $1
-      `, [id]);
-
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'Listing not found' });
-      }
+        FROM listings l LEFT JOIN users u ON l.seller_id = u.id 
+        WHERE l.id = $1`, [req.params.id]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
       res.json(result.rows[0]);
-    } catch (err: any) {
-      console.error('Error fetching single listing:', err.message);
+    } catch (err) {
       res.status(500).json({ error: 'Server error' });
     }
   });
 
-  // 3. Create Listing
+  // 3. Create Listing (With Supabase Storage)
   app.post('/api/listings', authenticate, upload.single('image'), async (req: any, res) => {
     try {
       const { title, description, price, category } = req.body;
-      let image_url = req.body.image_url;
+      let image_url = req.body.image_url || '';
 
       if (req.file) {
-        const file = req.file;
-        const fileName = `${Date.now()}-${file.originalname.replace(/\s/g, '_')}`;
-        
-        const { error } = await supabase.storage
-          .from('listing-images')
-          .upload(fileName, file.buffer, { contentType: file.mimetype });
-
+        const fileName = `${Date.now()}-${req.file.originalname.replace(/\s/g, '_')}`;
+        const { error } = await supabase.storage.from('listing-images').upload(fileName, req.file.buffer, { contentType: req.file.mimetype });
         if (error) throw error;
-        
-        const { data: publicUrl } = supabase.storage
-          .from('listing-images')
-          .getPublicUrl(fileName);
-          
-        image_url = publicUrl.publicUrl;
+        const { data } = supabase.storage.from('listing-images').getPublicUrl(fileName);
+        image_url = data.publicUrl;
       }
 
       await pool.query(
@@ -185,16 +166,16 @@ async function startServer() {
       res.json({ success: true });
     } catch (err) {
       console.error('Upload Error:', err);
-      res.status(500).json({ error: 'Failed to create listing' });
+      res.status(500).json({ error: 'Failed' });
     }
   });
 
-  // --- Cart Routes ---
+  // --- CART ROUTES (The logic you were missing) ---
+
   app.get('/api/cart', authenticate, async (req: any, res) => {
     try {
       const result = await pool.query(`
-        SELECT c.id, l.id as listing_id, l.title, l.price, l.image_url 
-        FROM cart_items c 
+        SELECT c.id as cart_item_id, l.* FROM cart_items c 
         JOIN listings l ON c.listing_id = l.id 
         WHERE c.user_id = $1`, [req.user.id]);
       res.json(result.rows || []);
@@ -203,16 +184,31 @@ async function startServer() {
     }
   });
 
-  // --- Profile Stub Routes ---
-  app.get('/api/warnings', authenticate, async (req: any, res) => {
-    res.json([]); 
+  app.post('/api/cart', authenticate, async (req: any, res) => {
+    try {
+      const { listing_id } = req.body;
+      await pool.query(
+        'INSERT INTO cart_items (user_id, listing_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [req.user.id, listing_id]
+      );
+      res.json({ success: true });
+    } catch (err) {
+      console.error('Cart Error:', err);
+      res.status(500).json({ error: 'Failed to add to cart' });
+    }
   });
 
-  app.get('/api/transactions', authenticate, async (req: any, res) => {
-    res.json([]);
+  app.delete('/api/cart/:id', authenticate, async (req: any, res) => {
+    try {
+      await pool.query('DELETE FROM cart_items WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to remove' });
+    }
   });
 
-  // --- Messages ---
+  // --- MESSAGES ROUTES ---
+
   app.get('/api/messages', authenticate, async (req: any, res) => {
     try {
       const result = await pool.query(`
@@ -229,12 +225,39 @@ async function startServer() {
     }
   });
 
-  // --- Production Serving ---
+  app.post('/api/messages', authenticate, async (req: any, res) => {
+    try {
+      const { receiver_id, listing_id, content } = req.body;
+      await pool.query(
+        'INSERT INTO messages (sender_id, receiver_id, listing_id, content) VALUES ($1, $2, $3, $4)',
+        [req.user.id, receiver_id, listing_id, content]
+      );
+      res.json({ success: true });
+    } catch (err) {
+      console.error('Message Error:', err);
+      res.status(500).json({ error: 'Failed to send' });
+    }
+  });
+
+  // --- USER DATA STUB (Prevents frontend loops) ---
+  app.get('/api/users/:id', async (req, res) => {
+    try {
+      const result = await pool.query('SELECT id, name, email, avatar_url FROM users WHERE id = $1', [req.params.id]);
+      res.json(result.rows[0] || { name: 'Campus Seller' });
+    } catch (err) {
+      res.json({ name: 'Campus Seller' });
+    }
+  });
+
+  // --- PROFILE STUBS ---
+  app.get('/api/warnings', authenticate, (req, res) => res.json([]));
+  app.get('/api/transactions', authenticate, (req, res) => res.json([]));
+
+  // --- PRODUCTION SERVING ---
   const PORT = process.env.PORT || 3000;
   
   if (process.env.NODE_ENV === 'production') {
-    // Robust path for Railway
-    const distPath = path.resolve(process.cwd(), 'frontend/dist');
+    const distPath = path.resolve(process.cwd(), 'dist'); 
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
