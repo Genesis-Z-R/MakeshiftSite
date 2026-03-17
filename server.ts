@@ -12,7 +12,7 @@ import fs from 'fs';
 
 dotenv.config();
 
-// FIX: Initialize Supabase Client for Storage
+// Initialize Supabase Client for Storage
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -66,12 +66,11 @@ async function startServer() {
   }));
   app.use(express.json());
 
-  // FIX: Resilient Middleware for Supabase/Google UUIDs
+  // Middleware for Supabase/Google UUIDs
   const authenticate = (req: any, res: any, next: any) => {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
     try {
-      // jwt.decode is safer for cross-provider tokens in a Capstone demo
       const decoded: any = jwt.decode(token); 
       if (!decoded) return res.status(401).json({ error: 'Invalid token' });
       
@@ -86,61 +85,77 @@ async function startServer() {
     }
   };
 
-  // --- Listing Routes (FIXED: LEFT JOIN + Dynamic Parameters) ---
-  // --- server.ts (Updated Listing Route) ---
+  // --- Listing Routes ---
 
-app.get('/api/listings', async (req, res) => {
-  try {
-    const { search, category, seller_id, limit = 12, offset = 0 } = req.query;
-    
-    // 1. Base Query with LEFT JOIN and COALESCE to prevent null seller names
-    let query = `
-      SELECT l.*, COALESCE(u.name, 'Campus Seller') as seller_name 
-      FROM listings l 
-      LEFT JOIN users u ON l.seller_id = u.id
-    `;
-    
-    const params: any[] = [];
-    const conditions: string[] = [];
+  // 1. Get All Listings (FIXED: Dynamic parameters and LEFT JOIN)
+  app.get('/api/listings', async (req, res) => {
+    try {
+      const { search, category, seller_id, limit = 12, offset = 0 } = req.query;
+      
+      let query = `
+        SELECT l.*, COALESCE(u.name, 'Campus Seller') as seller_name 
+        FROM listings l 
+        LEFT JOIN users u ON l.seller_id = u.id
+      `;
+      
+      const params: any[] = [];
+      const conditions: string[] = [];
 
-    // 2. Build conditions dynamically using params.length to avoid index mismatch
-    if (seller_id) {
-      params.push(seller_id);
-      conditions.push(`l.seller_id = $${params.length}`);
-    } else {
-      conditions.push("l.status = 'available'");
+      if (seller_id) {
+        params.push(seller_id);
+        conditions.push(`l.seller_id = $${params.length}`);
+      } else {
+        conditions.push("l.status = 'available'");
+      }
+
+      if (category && category !== 'All') {
+        params.push(category);
+        conditions.push(`l.category = $${params.length}`);
+      }
+
+      if (search) {
+        params.push(`%${search}%`);
+        conditions.push(`(l.title ILIKE $${params.length} OR l.description ILIKE $${params.length})`);
+      }
+
+      if (conditions.length > 0) {
+        query += " WHERE " + conditions.join(" AND ");
+      }
+
+      query += ` ORDER BY l.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      params.push(Number(limit), Number(offset));
+
+      const result = await pool.query(query, params);
+      res.json(result.rows || []);
+
+    } catch (err: any) {
+      console.error('DATABASE ERROR:', err.message);
+      res.status(200).json([]); 
     }
+  });
 
-    if (category && category !== 'All') {
-      params.push(category);
-      conditions.push(`l.category = $${params.length}`);
+  // 2. Get Single Listing (NEW: Fixes the blank page issue)
+  app.get('/api/listings/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const result = await pool.query(`
+        SELECT l.*, COALESCE(u.name, 'Campus Seller') as seller_name 
+        FROM listings l 
+        LEFT JOIN users u ON l.seller_id = u.id 
+        WHERE l.id = $1
+      `, [id]);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Listing not found' });
+      }
+      res.json(result.rows[0]);
+    } catch (err: any) {
+      console.error('Error fetching single listing:', err.message);
+      res.status(500).json({ error: 'Server error' });
     }
+  });
 
-    if (search) {
-      params.push(`%${search}%`);
-      conditions.push(`(l.title ILIKE $${params.length} OR l.description ILIKE $${params.length})`);
-    }
-
-    if (conditions.length > 0) {
-      query += " WHERE " + conditions.join(" AND ");
-    }
-
-    // 3. Add Sort and Pagination with dynamic indexing
-    query += ` ORDER BY l.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(Number(limit), Number(offset));
-
-    const result = await pool.query(query, params);
-    
-    // 4. Send successful response
-    res.json(result.rows || []);
-
-  } catch (err: any) {
-    // FALLBACK: Log error on server but send empty array to prevent frontend crash
-    console.error('DATABASE ERROR PREVENTED:', err.message);
-    res.status(200).json([]); 
-  }
-});
-
+  // 3. Create Listing
   app.post('/api/listings', authenticate, upload.single('image'), async (req: any, res) => {
     try {
       const { title, description, price, category } = req.body;
@@ -188,7 +203,7 @@ app.get('/api/listings', async (req, res) => {
     }
   });
 
-  // --- Profile Stub Routes (Stops 404 Error Crashes) ---
+  // --- Profile Stub Routes ---
   app.get('/api/warnings', authenticate, async (req: any, res) => {
     res.json([]); 
   });
@@ -214,11 +229,16 @@ app.get('/api/listings', async (req, res) => {
     }
   });
 
+  // --- Production Serving ---
   const PORT = process.env.PORT || 3000;
+  
   if (process.env.NODE_ENV === 'production') {
-    const distPath = path.join(process.cwd(), 'frontend/dist');
+    // Robust path for Railway
+    const distPath = path.resolve(process.cwd(), 'frontend/dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
   }
 
   httpServer.listen(PORT, '0.0.0.0', () => {
