@@ -83,24 +83,29 @@ const Messages: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
-    if (socket) {
-      socket.on('new_message', (message: Message) => {
-        if (
-          selectedConv &&
-          message.listing_id === selectedConv.listing_id &&
-          (message.sender_id === selectedConv.other_user_id || message.receiver_id === selectedConv.other_user_id)
-        ) {
-          setMessages(prev => [...prev, message]);
-        }
-        fetchConversations();
-      });
+  if (socket) {
+    socket.on('new_message', (message: Message) => {
+      // ONLY append the message if it belongs to the conversation currently open
+      if (
+        selectedConv &&
+        Number(message.listing_id) === Number(selectedConv.listing_id) &&
+        (message.sender_id === selectedConv.other_user_id || message.receiver_id === selectedConv.other_user_id)
+      ) {
+        setMessages(prev => {
+          // Prevent duplicate messages if the socket sends it twice
+          if (prev.find(m => m.id === message.id)) return prev;
+          return [...prev, message];
+        });
+      }
+      // Always refresh the sidebar to show the latest snippet
+      fetchConversations();
+    });
 
-      return () => {
-        socket.off('new_message');
-      };
-    }
-  }, [socket, selectedConv]);
-
+    return () => {
+      socket.off('new_message');
+    };
+  }
+}, [socket, selectedConv]);
   const fetchMessages = async (conv: Conversation) => {
     try {
       const response = await api.get(`/messages/${conv.other_user_id}?listing_id=${conv.listing_id}`);

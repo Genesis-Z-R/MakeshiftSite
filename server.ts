@@ -209,21 +209,30 @@ async function startServer() {
 
   // --- MESSAGES ROUTES ---
 
-  app.get('/api/messages', authenticate, async (req: any, res) => {
-    try {
-      const result = await pool.query(`
-        SELECT m.*, u1.name as sender_name, u2.name as receiver_name, l.title as listing_title
-        FROM messages m
-        JOIN users u1 ON m.sender_id = u1.id
-        JOIN users u2 ON m.receiver_id = u2.id
-        JOIN listings l ON m.listing_id = l.id
-        WHERE m.sender_id = $1 OR m.receiver_id = $1
-        ORDER BY m.created_at DESC`, [req.user.id]);
-      res.json(result.rows || []);
-    } catch (err) {
-      res.status(500).json([]);
-    }
-  });
+  // GET messages for a specific conversation
+app.get('/api/messages/:otherUserId', authenticate, async (req: any, res) => {
+  try {
+    const { otherUserId } = req.params;
+    const { listing_id } = req.query;
+
+    const result = await pool.query(`
+      SELECT m.*, u1.name as sender_name, u2.name as receiver_name
+      FROM messages m
+      JOIN users u1 ON m.sender_id = u1.id
+      JOIN users u2 ON m.receiver_id = u2.id
+      WHERE 
+        ((m.sender_id = $1 AND m.receiver_id = $2) OR (m.sender_id = $2 AND m.receiver_id = $1))
+        AND m.listing_id = $3
+      ORDER BY m.created_at ASC`, 
+      [req.user.id, otherUserId, listing_id]
+    );
+
+    res.json(result.rows || []);
+  } catch (err) {
+    console.error('Error fetching conversation:', err);
+    res.status(500).json([]);
+  }
+});
 
   app.post('/api/messages', authenticate, async (req: any, res) => {
     try {
