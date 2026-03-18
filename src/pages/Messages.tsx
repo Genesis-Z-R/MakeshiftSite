@@ -3,12 +3,12 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api';
 import { format } from 'date-fns';
-import { Send, User, MessageSquare } from 'lucide-react';
+import { Send, MessageSquare } from 'lucide-react';
 
 interface Message {
   id: number;
-  sender_id: string; // Changed to string to support UUIDs
-  receiver_id: string; // Changed to string to support UUIDs
+  sender_id: string;
+  receiver_id: string;
   listing_id: number;
   content: string;
   created_at: string;
@@ -27,13 +27,123 @@ interface Conversation {
   unread_count: number;
 }
 
-
-
 const Messages: React.FC = () => {
- 
+  const { user } = useAuth();
+  const { socket } = useSocket();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const fetchConversations = async () => {
+    if (!user) return;
+    try {
+      const response = await api.get('/messages');
+      const rawMessages: Message[] = Array.isArray(response.data) ? response.data : [];
+      
+      const convs: Record<string, Conversation> = {};
+      
+      rawMessages.forEach(msg => {
+        const isSender = msg.sender_id === user.id;
+        const otherId = isSender ? msg.receiver_id : msg.sender_id;
+        const otherName = isSender ? (msg.receiver_name || 'User') : (msg.sender_name || 'User');
+        const key = `${otherId}_${msg.listing_id}`;
+
+        if (!convs[key]) {
+          convs[key] = {
+            other_user_id: otherId,
+            other_user_name: otherName,
+            listing_id: msg.listing_id,
+            listing_title: msg.listing_title || 'Unknown Listing',
+            last_message: msg.content,
+            last_message_time: msg.created_at,
+            unread_count: 0
+          };
+        }
+      });
+
+      setConversations(Object.values(convs));
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+      setConversations([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchConversations();
+  }, [user]);
+
+  useEffect(() => {
+    if (socket) {
+      socket.on('new_message', (message: Message) => {
+        if (
+          selectedConv &&
+          message.listing_id === selectedConv.listing_id &&
+          (message.sender_id === selectedConv.other_user_id || message.receiver_id === selectedConv.other_user_id)
+        ) {
+          setMessages(prev => [...prev, message]);
+        }
+        fetchConversations();
+      });
+
+      return () => {
+        socket.off('new_message');
+      };
+    }
+  }, [socket, selectedConv]);
+
+  const fetchMessages = async (conv: Conversation) => {
+    try {
+      const response = await api.get(`/messages/${conv.other_user_id}?listing_id=${conv.listing_id}`);
+      setMessages(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      setMessages([]);
+    }
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !selectedConv || !user) return;
+
+    try {
+      const messageData = {
+        receiver_id: selectedConv.other_user_id,
+        listing_id: selectedConv.listing_id,
+        content: newMessage
+      };
+
+      await api.post('/messages', messageData);
+      
+      const optimisticMsg: Message = {
+        id: Date.now(),
+        sender_id: user.id,
+        receiver_id: selectedConv.other_user_id,
+        listing_id: selectedConv.listing_id,
+        content: newMessage,
+        created_at: new Date().toISOString()
+      };
+
+      setMessages(prev => [...prev, optimisticMsg]);
+      setNewMessage('');
+      fetchConversations();
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
+  };
 
   return (
-    <div className="max-w-6xl mx-auto h-[calc(100vh-12rem)] flex bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors duration-300">
+    <div className="max-w-6xl mx-auto h-[calc(100vh-12rem)] flex bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors">
+      
       {/* Sidebar */}
       <div className="w-1/3 border-r border-slate-100 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900">
         <div className="p-6 border-b border-slate-100 dark:border-slate-800">
@@ -69,7 +179,9 @@ const Messages: React.FC = () => {
                   <p className="text-xs font-black text-indigo-600 truncate mb-1 uppercase tracking-tighter">
                     {conv.listing_title}
                   </p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 truncate font-medium">{conv.last_message}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 truncate font-medium">
+                    {conv.last_message}
+                  </p>
                 </div>
               </button>
             ))
@@ -137,7 +249,7 @@ const Messages: React.FC = () => {
                 <button
                   type="submit"
                   disabled={!newMessage.trim()}
-                  className="bg-indigo-600 text-white p-4 rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                  className="bg-indigo-600 text-white p-4 rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none disabled:opacity-50 active:scale-95"
                 >
                   <Send className="w-6 h-6" />
                 </button>
