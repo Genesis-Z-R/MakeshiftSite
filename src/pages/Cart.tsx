@@ -14,8 +14,10 @@ const Cart: React.FC = () => {
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
   const navigate = useNavigate();
 
-  // FIX 1: Safe reduce calculation to prevent "t.reduce is not a function"
-  const total = Array.isArray(cart) ? cart.reduce((sum, item) => sum + item.price, 0) : 0;
+  // FIX 1: Convert price to Number for calculation
+  const total = Array.isArray(cart) 
+    ? cart.reduce((sum, item) => sum + Number(item.price || 0), 0) 
+    : 0;
 
   const handleCheckout = async () => {
     setError('');
@@ -39,7 +41,6 @@ const Cart: React.FC = () => {
     }
   };
 
-  // FIX 2: Safe check for empty cart
   if (!cart || cart.length === 0) {
     return (
       <main className="max-w-4xl mx-auto px-4 py-20 text-center">
@@ -76,9 +77,7 @@ const Cart: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        {/* Cart Items */}
         <section className="lg:col-span-2 space-y-6" aria-label="Items in your cart">
-          {/* FIX 3: Optional chaining on map */}
           {cart?.map((item, idx) => (
             <div
               key={`cart-item-${item.id}-${idx}`}
@@ -104,8 +103,10 @@ const Cart: React.FC = () => {
                       <Trash2 className="h-5 w-5" aria-hidden="true" />
                     </button>
                   </div>
-                  {/* Currency updated to GH₵ */}
-                  <p className="text-indigo-600 dark:text-indigo-400 font-bold text-lg">GH₵{item.price.toFixed(2)}</p>
+                  {/* FIX 2: Convert price to Number before calling .toFixed() */}
+                  <p className="text-indigo-600 dark:text-indigo-400 font-bold text-lg">
+                    GH₵{Number(item.price || 0).toFixed(2)}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                   <Package className="h-4 w-4" aria-hidden="true" />
@@ -116,7 +117,6 @@ const Cart: React.FC = () => {
           ))}
         </section>
 
-        {/* Order Summary */}
         <aside className="lg:col-span-1" aria-label="Order Summary">
           <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 sticky top-24 transition-colors duration-200">
             <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-50 mb-6">Order Summary</h2>
@@ -124,7 +124,7 @@ const Cart: React.FC = () => {
             <div className="space-y-4 mb-8">
               <div className="flex justify-between text-slate-600 dark:text-slate-400">
                 <span>Subtotal</span>
-                <span>GH₵{total.toFixed(2)}</span>
+                <span>GH₵{Number(total).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-slate-600 dark:text-slate-400">
                 <span>Service Fee</span>
@@ -132,7 +132,7 @@ const Cart: React.FC = () => {
               </div>
               <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
                 <span className="text-lg font-bold text-slate-900 dark:text-slate-50">Total</span>
-                <span className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">GH₵{total.toFixed(2)}</span>
+                <span className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">GH₵{Number(total).toFixed(2)}</span>
               </div>
             </div>
 
@@ -189,7 +189,7 @@ const Cart: React.FC = () => {
         onClose={() => setShowCheckoutConfirm(false)}
         onConfirm={handleCheckout}
         title="Complete Purchase"
-        message={`You are about to purchase ${cart?.length} item(s) for a total of GH₵${total.toFixed(2)}. This is a simulated transaction.`}
+        message={`You are about to purchase ${cart?.length} item(s) for a total of GH₵${Number(total).toFixed(2)}. This is a simulated transaction.`}
         confirmText="Confirm Purchase"
       />
     </main>
