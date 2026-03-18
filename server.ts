@@ -45,16 +45,23 @@ async function startServer() {
   const userSockets = new Map<string, string>();
   const socketUsers = new Map<string, string>();
 
+  // --- SOCKET.IO LOGIC ---
   io.on('connection', (socket) => {
     socket.on('authenticate', (userId: string) => {
       userSockets.set(userId, socket.id);
       socketUsers.set(socket.id, userId);
     });
 
+    // FIXED: Properly placed inside the connection block and handles both sender/receiver
     socket.on('send_message', (data) => {
       const receiverSocketId = userSockets.get(data.receiver_id);
+      const senderSocketId = userSockets.get(data.sender_id);
+      
       if (receiverSocketId) {
         io.to(receiverSocketId).emit('new_message', data);
+      }
+      if (senderSocketId) {
+        io.to(senderSocketId).emit('new_message', data);
       }
     });
 
@@ -94,7 +101,7 @@ async function startServer() {
 
   // --- LISTING ROUTES ---
 
-  // 1. Get All Listings (FIXED: Dynamic parameters and LEFT JOIN)
+  // 1. Get All Listings
   app.get('/api/listings', async (req, res) => {
     try {
       const { search, category, seller_id, limit = 12, offset = 0 } = req.query;
@@ -131,7 +138,7 @@ async function startServer() {
     }
   });
 
-  // 2. Get Single Listing (FIXED: Handles specific ID lookup)
+  // 2. Get Single Listing
   app.get('/api/listings/:id', async (req, res) => {
     try {
       const result = await pool.query(`
@@ -170,7 +177,7 @@ async function startServer() {
     }
   });
 
-  // --- CART ROUTES (The logic you were missing) ---
+  // --- CART ROUTES ---
 
   app.get('/api/cart', authenticate, async (req: any, res) => {
     try {
@@ -209,107 +216,73 @@ async function startServer() {
 
   // --- MESSAGES ROUTES ---
 
- // --- MESSAGES ROUTES ---
+  // 1. GET ALL CONVERSATIONS (Sidebar List)
+  app.get('/api/messages', authenticate, async (req: any, res) => {
+    try {
+      const result = await pool.query(`
+        SELECT DISTINCT ON (other_user_id, listing_id)
+          m.id,
+          m.content,
+          m.created_at,
+          m.listing_id,
+          l.title as listing_title,
+          CASE 
+            WHEN m.sender_id = $1 THEN m.receiver_id 
+            ELSE m.sender_id 
+          END as other_user_id,
+          CASE 
+            WHEN m.sender_id = $1 THEN u2.name 
+            ELSE u1.name 
+          END as other_user_name
+        FROM messages m
+        JOIN listings l ON m.listing_id = l.id
+        JOIN users u1 ON m.sender_id = u1.id
+        JOIN users u2 ON m.receiver_id = u2.id
+        WHERE m.sender_id = $1 OR m.receiver_id = $1
+        ORDER BY other_user_id, listing_id, m.created_at DESC
+      `, [req.user.id]);
 
-// 1. GET ALL CONVERSATIONS (Sidebar List)
-app.get('/api/messages', authenticate, async (req: any, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT DISTINCT ON (other_user_id, listing_id)
-        m.id,
-        m.content,
-        m.created_at,
-        m.listing_id,
-        l.title as listing_title,
-        CASE 
-          WHEN m.sender_id = $1 THEN m.receiver_id 
-          ELSE m.sender_id 
-        END as other_user_id,
-        CASE 
-          WHEN m.sender_id = $1 THEN u2.name 
-          ELSE u1.name 
-        END as other_user_name
-      FROM messages m
-      JOIN listings l ON m.listing_id = l.id
-      JOIN users u1 ON m.sender_id = u1.id
-      JOIN users u2 ON m.receiver_id = u2.id
-      WHERE m.sender_id = $1 OR m.receiver_id = $1
-      ORDER BY other_user_id, listing_id, m.created_at DESC
-    `, [req.user.id]);
+      res.json(result.rows || []);
+    } catch (err) {
+      console.error('Sidebar Fetch Error:', err);
+      res.status(500).json([]);
+    }
+  });
 
-    res.json(result.rows || []);
-  } catch (err) {
-    console.error('Sidebar Fetch Error:', err);
-    res.status(500).json([]);
-  }
-});
+  // 2. GET SINGLE CONVERSATION (Chat Box)
+  app.get('/api/messages/:otherUserId', authenticate, async (req: any, res) => {
+    try {
+      const { otherUserId } = req.params;
+      const { listing_id } = req.query;
 
-// 2. GET SINGLE CONVERSATION (Chat Box)
-app.get('/api/messages/:otherUserId', authenticate, async (req: any, res) => {
-  try {
-    const { otherUserId } = req.params;
-    const { listing_id } = req.query;
+      const result = await pool.query(`
+        SELECT m.*, u1.name as sender_name, u2.name as receiver_name
+        FROM messages m
+        JOIN users u1 ON m.sender_id = u1.id
+        JOIN users u2 ON m.receiver_id = u2.id
+        WHERE 
+          ((m.sender_id = $1 AND m.receiver_id = $2) OR (m.sender_id = $2 AND m.receiver_id = $1))
+          AND m.listing_id = $3
+        ORDER BY m.created_at ASC`, 
+        [req.user.id, otherUserId, listing_id]
+      );
 
-    const result = await pool.query(`
-      SELECT m.*, u1.name as sender_name, u2.name as receiver_name
-      FROM messages m
-      JOIN users u1 ON m.sender_id = u1.id
-      JOIN users u2 ON m.receiver_id = u2.id
-      WHERE 
-        ((m.sender_id = $1 AND m.receiver_id = $2) OR (m.sender_id = $2 AND m.receiver_id = $1))
-        AND m.listing_id = $3
-      ORDER BY m.created_at ASC`, 
-      [req.user.id, otherUserId, listing_id]
-    );
+      res.json(result.rows || []);
+    } catch (err) {
+      console.error('Error fetching conversation:', err);
+      res.status(500).json([]);
+    }
+  });
 
-    res.json(result.rows || []);
-  } catch (err) {
-    console.error('Error fetching conversation:', err);
-    res.status(500).json([]);
-  }
-});
-
-// 3. SEND MESSAGE
-app.post('/api/messages', authenticate, async (req: any, res) => {
-  try {
-    const { receiver_id, listing_id, content } = req.body;
-    const result = await pool.query(
-      'INSERT INTO messages (sender_id, receiver_id, listing_id, content) VALUES ($1, $2, $3, $4) RETURNING *',
-      [req.user.id, receiver_id, listing_id, content]
-    );
-    
-    // Logic to notify via Socket is usually handled on the frontend via socket.emit 
-    // but the DB insert must happen first.
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error('Message Error:', err);
-    res.status(500).json({ error: 'Failed to send' });
-  }
-});
-
-// --- UPDATED SOCKET LOGIC (Inside startServer) ---
-// Find your io.on('connection') and update the send_message block:
-socket.on('send_message', (data) => {
-  const receiverSocketId = userSockets.get(data.receiver_id);
-  const senderSocketId = userSockets.get(data.sender_id);
-  
-  if (receiverSocketId) {
-    io.to(receiverSocketId).emit('new_message', data);
-  }
-  // This ensures the sender's sidebar and chat also update
-  if (senderSocketId) {
-    io.to(senderSocketId).emit('new_message', data);
-  }
-});
-
+  // 3. SEND MESSAGE
   app.post('/api/messages', authenticate, async (req: any, res) => {
     try {
       const { receiver_id, listing_id, content } = req.body;
-      await pool.query(
-        'INSERT INTO messages (sender_id, receiver_id, listing_id, content) VALUES ($1, $2, $3, $4)',
+      const result = await pool.query(
+        'INSERT INTO messages (sender_id, receiver_id, listing_id, content) VALUES ($1, $2, $3, $4) RETURNING *',
         [req.user.id, receiver_id, listing_id, content]
       );
-      res.json({ success: true });
+      res.json(result.rows[0]);
     } catch (err) {
       console.error('Message Error:', err);
       res.status(500).json({ error: 'Failed to send' });
