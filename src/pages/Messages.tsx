@@ -48,7 +48,6 @@ const Messages: React.FC = () => {
     if (!user) return;
     try {
       const response = await api.get('/messages');
-      // FIX: Defensive check for response data
       const rawMessages: Message[] = Array.isArray(response.data) ? response.data : [];
       
       const convs: Record<string, Conversation> = {};
@@ -105,7 +104,6 @@ const Messages: React.FC = () => {
   const fetchMessages = async (conv: Conversation) => {
     try {
       const response = await api.get(`/messages/${conv.other_user_id}?listing_id=${conv.listing_id}`);
-      // FIX: Ensure messages is always an array
       setMessages(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -152,8 +150,7 @@ const Messages: React.FC = () => {
           <h2 className="text-2xl font-black text-slate-900 dark:text-slate-50 tracking-tight">Messages</h2>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {/* FIX: Defensive map for conversations */}
-          {(Array.isArray(conversations) && conversations.length > 0) ? (
+          {Array.isArray(conversations) && conversations.length > 0 ? (
             conversations.map(conv => (
               <button
                 key={`${conv.other_user_id}_${conv.listing_id}`}
@@ -218,7 +215,7 @@ const Messages: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {/* FIX: Defensive map for messages */}
+              {/* FIXED SYNTAX BELOW */}
               {Array.isArray(messages) && messages.map((msg, idx) => {
                 const isOwn = msg.sender_id === user?.id;
                 return (
@@ -236,7 +233,8 @@ const Messages: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                ))}
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
 
