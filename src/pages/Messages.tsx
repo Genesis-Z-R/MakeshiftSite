@@ -106,15 +106,42 @@ const Messages: React.FC = () => {
     };
   }
 }, [socket, selectedConv]);
-  const fetchMessages = async (conv: Conversation) => {
-    try {
-      const response = await api.get(`/messages/${conv.other_user_id}?listing_id=${conv.listing_id}`);
-      setMessages(Array.isArray(response.data) ? response.data : []);
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-      setMessages([]);
-    }
-  };
+  // Find your fetchMessages function and update it:
+const fetchMessages = async (conv: Conversation) => {
+  try {
+    // FIX: Using template literals to pass the listing_id query param
+    const response = await api.get(`/messages/${conv.other_user_id}?listing_id=${conv.listing_id}`);
+    setMessages(Array.isArray(response.data) ? response.data : []);
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    setMessages([]);
+  }
+};
+
+// Find your socket useEffect and update it:
+useEffect(() => {
+  if (socket) {
+    socket.on('new_message', (message: Message) => {
+      // FIX: Use Number() to avoid string/number comparison issues
+      if (
+        selectedConv &&
+        Number(message.listing_id) === Number(selectedConv.listing_id) &&
+        (message.sender_id === selectedConv.other_user_id || message.receiver_id === selectedConv.other_user_id)
+      ) {
+        setMessages(prev => {
+          if (prev.find(m => m.id === message.id)) return prev;
+          return [...prev, message];
+        });
+      }
+      // Refresh sidebar regardless so the last_message updates
+      fetchConversations();
+    });
+
+    return () => {
+      socket.off('new_message');
+    };
+  }
+}, [socket, selectedConv]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
