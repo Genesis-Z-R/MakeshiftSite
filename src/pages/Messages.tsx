@@ -48,6 +48,7 @@ const Messages: React.FC = () => {
     if (!user) return;
     try {
       const response = await api.get('/messages');
+      // FIX: Defensive check for response data
       const rawMessages: Message[] = Array.isArray(response.data) ? response.data : [];
       
       const convs: Record<string, Conversation> = {};
@@ -104,6 +105,7 @@ const Messages: React.FC = () => {
   const fetchMessages = async (conv: Conversation) => {
     try {
       const response = await api.get(`/messages/${conv.other_user_id}?listing_id=${conv.listing_id}`);
+      // FIX: Ensure messages is always an array
       setMessages(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -150,7 +152,8 @@ const Messages: React.FC = () => {
           <h2 className="text-2xl font-black text-slate-900 dark:text-slate-50 tracking-tight">Messages</h2>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {conversations.length > 0 ? (
+          {/* FIX: Defensive map for conversations */}
+          {(Array.isArray(conversations) && conversations.length > 0) ? (
             conversations.map(conv => (
               <button
                 key={`${conv.other_user_id}_${conv.listing_id}`}
@@ -173,7 +176,7 @@ const Messages: React.FC = () => {
                       {conv.other_user_name || 'Unknown User'}
                     </h3>
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      {format(new Date(conv.last_message_time), 'MMM d')}
+                      {conv.last_message_time ? format(new Date(conv.last_message_time), 'MMM d') : ''}
                     </span>
                   </div>
                   <p className="text-xs font-black text-indigo-600 truncate mb-1 uppercase tracking-tighter">
@@ -215,10 +218,11 @@ const Messages: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.map((msg, idx) => {
+              {/* FIX: Defensive map for messages */}
+              {Array.isArray(messages) && messages.map((msg, idx) => {
                 const isOwn = msg.sender_id === user?.id;
                 return (
-                  <div key={idx} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                  <div key={`msg-${msg.id || idx}`} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                     <div
                       className={`max-w-[75%] p-4 rounded-[1.5rem] text-sm font-medium shadow-sm ${
                         isOwn
@@ -228,12 +232,11 @@ const Messages: React.FC = () => {
                     >
                       <p>{msg.content}</p>
                       <p className={`text-[10px] mt-2 font-black uppercase tracking-tighter ${isOwn ? 'text-indigo-200' : 'text-slate-400'}`}>
-                        {format(new Date(msg.created_at), 'HH:mm')}
+                        {msg.created_at ? format(new Date(msg.created_at), 'HH:mm') : ''}
                       </p>
                     </div>
                   </div>
-                );
-              })}
+                ))}
               <div ref={messagesEndRef} />
             </div>
 
