@@ -29,7 +29,8 @@ interface Conversation {
 
 const Messages: React.FC = () => {
   const { user } = useAuth();
-  const { socket } = useSocket();
+  // FIXED: Destructure clearNotifications from the socket context
+  const { socket, clearNotifications } = useSocket(); 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -46,7 +47,13 @@ const Messages: React.FC = () => {
     scrollToBottom();
   }, [messages, isTyping]);
 
-  // FIXED: No more manual grouping. The backend handles this perfectly now.
+  // FIXED: Clear notification badge immediately when visiting the messages page
+  useEffect(() => {
+    if (clearNotifications) {
+      clearNotifications();
+    }
+  }, [clearNotifications]);
+
   const fetchConversations = async () => {
     if (!user) return;
     try {
@@ -62,7 +69,6 @@ const Messages: React.FC = () => {
     fetchConversations();
   }, [user]);
 
-  // FIXED: Real-time and Typing listeners
   useEffect(() => {
     if (socket) {
       const handleNewMessage = (message: Message) => {
@@ -75,9 +81,14 @@ const Messages: React.FC = () => {
             if (prev.find(m => m.id === message.id)) return prev;
             return [...prev, message];
           });
-          setIsTyping(false); // Stop typing indicator if they sent the message
+          setIsTyping(false); 
         }
         fetchConversations();
+        
+        // FIXED: Keep notifications at 0 if we are actively on the messages page
+        if (clearNotifications) {
+          clearNotifications();
+        }
       };
 
       const handleTyping = (data: any) => {
@@ -96,7 +107,7 @@ const Messages: React.FC = () => {
         socket.off('typing', handleTyping);
       };
     }
-  }, [socket, selectedConv]);
+  }, [socket, selectedConv, clearNotifications]);
 
   const fetchMessages = async (conv: Conversation) => {
     try {
@@ -108,7 +119,6 @@ const Messages: React.FC = () => {
     }
   };
 
-  // NEW: Emits typing event to socket
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMessage(e.target.value);
     if (socket && selectedConv && user) {
@@ -120,7 +130,6 @@ const Messages: React.FC = () => {
     }
   };
 
-  // FIXED: Actually emits the message to the socket for real-time
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedConv || !user) return;
@@ -135,7 +144,6 @@ const Messages: React.FC = () => {
       const response = await api.post('/messages', messageData);
       const savedMsg = response.data;
       
-      // Emit to Socket for Real-Time delivery
       if (socket) {
         socket.emit('send_message', savedMsg);
       }
@@ -171,7 +179,7 @@ const Messages: React.FC = () => {
                 }`}
               >
                 <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black shrink-0 shadow-lg shadow-indigo-100 dark:shadow-none">
-                  {(conv.other_user_name || 'U').charAt(0)}
+                  {(conv.other_user_name ? conv.other_user_name.charAt(0) : 'U').toUpperCase()}
                 </div>
                 <div className="flex-1 text-left min-w-0">
                   <div className="flex justify-between items-baseline mb-1">
@@ -207,7 +215,7 @@ const Messages: React.FC = () => {
             <div className="p-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black">
-                  {(selectedConv.other_user_name || 'U').charAt(0)}
+                  {(selectedConv.other_user_name ? selectedConv.other_user_name.charAt(0) : 'U').toUpperCase()}
                 </div>
                 <div>
                   <h3 className="font-black text-slate-900 dark:text-slate-50">
