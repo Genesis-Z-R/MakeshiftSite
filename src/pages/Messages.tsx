@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api';
 import { format } from 'date-fns';
-import { Send, MessageSquare, AlertTriangle } from 'lucide-react';
+import { Send, MessageSquare, AlertTriangle, ArrowLeft } from 'lucide-react';
 
 interface Message {
   id: number;
@@ -170,14 +170,15 @@ const Messages: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto h-[calc(100vh-12rem)] flex bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors">
+    // Responsive Height: Uses dynamic viewport height (dvh) on mobile to prevent the browser's address bar from hiding the input
+    <div className="max-w-6xl mx-auto h-[calc(100dvh-10rem)] md:h-[calc(100vh-12rem)] flex bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors">
       
-      {/* Sidebar */}
-      <div className="w-1/3 border-r border-slate-100 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900">
+      {/* SIDEBAR: Hidden on mobile IF a conversation is selected */}
+      <div className={`${selectedConv ? 'hidden md:flex' : 'flex'} w-full md:w-1/3 border-r-0 md:border-r border-slate-100 dark:border-slate-800 flex-col bg-white dark:bg-slate-900`}>
         <div className="p-6 border-b border-slate-100 dark:border-slate-800">
           <h2 className="text-2xl font-black text-slate-900 dark:text-slate-50 tracking-tight">Messages</h2>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto pb-10 md:pb-0">
           {Array.isArray(conversations) && conversations.length > 0 ? (
             conversations.map(conv => (
               <button
@@ -223,26 +224,36 @@ const Messages: React.FC = () => {
         </div>
       </div>
 
-      {/* Chat Area */}
-      <div className="flex-1 flex flex-col bg-slate-50 dark:bg-black/20">
+      {/* CHAT AREA: Hidden on mobile IF NO conversation is selected */}
+      <div className={`${!selectedConv ? 'hidden md:flex' : 'flex'} flex-1 flex-col bg-slate-50 dark:bg-black/20 w-full md:w-auto`}>
         {selectedConv ? (
           <>
-            <div className="p-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-4">
+            <div className="p-4 md:p-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3 md:gap-4">
+                
+                {/* MOBILE BACK BUTTON */}
+                <button 
+                  onClick={() => setSelectedConv(null)}
+                  className="md:hidden p-2 -ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                  aria-label="Back to messages"
+                >
+                  <ArrowLeft className="w-6 h-6" />
+                </button>
+
                 <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black">
                   {(selectedConv.other_user_name ? selectedConv.other_user_name.charAt(0) : 'U').toUpperCase()}
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-900 dark:text-slate-50">
+                  <h3 className="font-black text-slate-900 dark:text-slate-50 max-w-[150px] md:max-w-xs truncate">
                     {selectedConv.other_user_name || 'Unknown User'}
                   </h3>
-                  <p className="text-xs text-indigo-600 font-black uppercase tracking-widest">
+                  <p className="text-[10px] md:text-xs text-indigo-600 font-black uppercase tracking-widest max-w-[150px] md:max-w-xs truncate">
                     {selectedConv.listing_title}
                   </p>
                 </div>
               </div>
 
-              {/* REPORT BUTTON PLACED CORRECTLY HERE */}
+              {/* REPORT BUTTON */}
               <button 
                 onClick={handleReport}
                 className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
@@ -252,20 +263,20 @@ const Messages: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
               {Array.isArray(messages) && messages.map((msg, idx) => {
                 const isOwn = msg.sender_id === user?.id;
                 return (
                   <div key={`msg-${msg.id || idx}`} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                     <div
-                      className={`max-w-[75%] p-4 rounded-[1.5rem] text-sm font-medium shadow-sm ${
+                      className={`max-w-[85%] md:max-w-[75%] p-3.5 md:p-4 rounded-[1.5rem] text-sm font-medium shadow-sm ${
                         isOwn
                           ? 'bg-indigo-600 text-white rounded-tr-none'
                           : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 border border-slate-100 dark:border-slate-700 rounded-tl-none'
                       }`}
                     >
                       <p>{msg.content}</p>
-                      <p className={`text-[10px] mt-2 font-black uppercase tracking-tighter ${isOwn ? 'text-indigo-200' : 'text-slate-400'}`}>
+                      <p className={`text-[10px] mt-1.5 font-black uppercase tracking-tighter ${isOwn ? 'text-indigo-200' : 'text-slate-400'}`}>
                         {msg.created_at ? format(new Date(msg.created_at), 'HH:mm') : ''}
                       </p>
                     </div>
@@ -287,27 +298,27 @@ const Messages: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
-              <form onSubmit={handleSendMessage} className="flex gap-3">
+            <div className="p-4 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+              <form onSubmit={handleSendMessage} className="flex gap-2 md:gap-3">
                 <input
                   type="text"
                   value={newMessage}
                   onChange={handleInputChange}
-                  placeholder="Type your message..."
-                  className="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-2xl px-6 py-4 text-sm font-bold text-slate-900 dark:text-slate-50 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 transition-all placeholder:text-slate-400"
+                  placeholder="Type a message..."
+                  className="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-2xl px-5 py-3 md:px-6 md:py-4 text-sm font-bold text-slate-900 dark:text-slate-50 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 transition-all placeholder:text-slate-400"
                 />
                 <button
                   type="submit"
                   disabled={!newMessage.trim()}
-                  className="bg-indigo-600 text-white p-4 rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none disabled:opacity-50 active:scale-95"
+                  className="bg-indigo-600 text-white p-3 md:p-4 rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none disabled:opacity-50 active:scale-95 flex-shrink-0"
                 >
-                  <Send className="w-6 h-6" />
+                  <Send className="w-5 h-5 md:w-6 md:h-6" />
                 </button>
               </form>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8">
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8 hidden md:flex">
             <div className="w-20 h-20 bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 flex items-center justify-center mb-6">
               <MessageSquare className="w-10 h-10 text-indigo-600" />
             </div>
