@@ -170,14 +170,15 @@ const Messages: React.FC = () => {
   };
 
   return (
-    // Responsive Height: Uses dynamic viewport height (dvh) on mobile to prevent the browser's address bar from hiding the input
-    <div className="max-w-6xl mx-auto h-[calc(100dvh-15rem)] md:h-[calc(100vh-12rem)] mb-24 md:mb-0 flex bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors">
-      {/* SIDEBAR: Hidden on mobile IF a conversation is selected */}
+    // Reverted the container height back to normal, since the chat window will now break out of it!
+    <div className="max-w-6xl mx-auto h-[calc(100dvh-7rem)] md:h-[calc(100vh-12rem)] flex bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors">
+      
+      {/* SIDEBAR */}
       <div className={`${selectedConv ? 'hidden md:flex' : 'flex'} w-full md:w-1/3 border-r-0 md:border-r border-slate-100 dark:border-slate-800 flex-col bg-white dark:bg-slate-900`}>
         <div className="p-6 border-b border-slate-100 dark:border-slate-800">
           <h2 className="text-2xl font-black text-slate-900 dark:text-slate-50 tracking-tight">Messages</h2>
         </div>
-        <div className="flex-1 overflow-y-auto pb-10 md:pb-0">
+        <div className="flex-1 overflow-y-auto pb-6 md:pb-0">
           {Array.isArray(conversations) && conversations.length > 0 ? (
             conversations.map(conv => (
               <button
@@ -223,14 +224,16 @@ const Messages: React.FC = () => {
         </div>
       </div>
 
-      {/* CHAT AREA: Hidden on mobile IF NO conversation is selected */}
-      <div className={`${!selectedConv ? 'hidden md:flex' : 'flex'} flex-1 flex-col bg-slate-50 dark:bg-black/20 w-full md:w-auto`}>
+      {/* CHAT AREA: 
+        The magic happens here! On mobile, it becomes "fixed inset-0 z-[100]" 
+        which forces it to overlay the ENTIRE screen above all navbars.
+        On desktop (md:), it goes back to normal relative positioning.
+      */}
+      <div className={`${!selectedConv ? 'hidden md:flex' : 'flex fixed inset-0 z-[100] md:relative md:z-auto md:inset-auto'} flex-1 flex-col bg-slate-50 dark:bg-slate-900 w-full`}>
         {selectedConv ? (
           <>
-            <div className="p-4 md:p-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div className="p-4 pt-6 md:p-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shadow-sm md:shadow-none z-10">
               <div className="flex items-center gap-3 md:gap-4">
-                
-                {/* MOBILE BACK BUTTON */}
                 <button 
                   onClick={() => setSelectedConv(null)}
                   className="md:hidden p-2 -ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
@@ -252,7 +255,6 @@ const Messages: React.FC = () => {
                 </div>
               </div>
 
-              {/* REPORT BUTTON */}
               <button 
                 onClick={handleReport}
                 className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
@@ -283,7 +285,6 @@ const Messages: React.FC = () => {
                 );
               })}
               
-              {/* TYPING INDICATOR */}
               {isTyping && (
                 <div className="flex justify-start animate-in fade-in duration-300">
                   <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 rounded-[1.5rem] rounded-tl-none shadow-sm flex items-center gap-1.5">
@@ -297,7 +298,8 @@ const Messages: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="p-4 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+            {/* Form padded at the bottom to ensure it clears the iOS swipe indicator */}
+            <div className="p-4 pb-6 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
               <form onSubmit={handleSendMessage} className="flex gap-2 md:gap-3">
                 <input
                   type="text"
