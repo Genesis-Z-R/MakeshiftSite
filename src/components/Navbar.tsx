@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useSocket } from '../context/SocketContext';
 import { useAccessibility } from '../context/AccessibilityContext';
-import { ShoppingBag, Settings, Moon, Sun, PlusCircle, User, MessageSquare, LogOut, ShieldAlert } from 'lucide-react';
+import { ShoppingBag, Settings, Moon, Sun, PlusCircle, User, MessageSquare, LogOut, ShieldAlert, LogIn, UserPlus } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
 
 const Navbar: React.FC = () => {
@@ -16,7 +16,7 @@ const Navbar: React.FC = () => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const location = useLocation(); // Used to highlight the active tab on mobile
+  const location = useLocation();
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
@@ -44,12 +44,11 @@ const Navbar: React.FC = () => {
     setShowLogoutConfirm(false);
   };
 
-  // Helper function to check if a path is active for mobile tabs
   const isActive = (path: string) => location.pathname === path;
 
   return (
     <>
-      {/* --- TOP NAVBAR (Always visible, but changes content based on screen size) --- */}
+      {/* --- TOP NAVBAR --- */}
       <nav className={`sticky top-0 z-50 transition-all duration-300 ${
         isScrolled 
           ? 'bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800 py-3 shadow-sm' 
@@ -58,7 +57,6 @@ const Navbar: React.FC = () => {
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
             
-            {/* LOGO */}
             <Link to="/" className="flex items-center gap-2 group">
               <div className="bg-indigo-600 p-2 rounded-xl group-hover:rotate-12 transition-transform shadow-lg shadow-indigo-200 dark:shadow-none">
                 <ShoppingBag className="h-5 w-5 md:h-6 md:w-6 text-white" />
@@ -68,7 +66,7 @@ const Navbar: React.FC = () => {
               </span>
             </Link>
 
-            {/* DESKTOP NAVIGATION (Hidden on mobile) */}
+            {/* DESKTOP NAVIGATION */}
             <div className="hidden md:flex items-center gap-8">
               <Link to="/" className="text-sm font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:text-indigo-600 transition-colors">Marketplace</Link>
               {user ? (
@@ -88,7 +86,6 @@ const Navbar: React.FC = () => {
                   <Link to="/create-listing" className="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 dark:shadow-none uppercase tracking-widest">
                     Sell Item
                   </Link>
-
                   <button onClick={() => setShowLogoutConfirm(true)} className="text-xs font-black uppercase tracking-widest text-slate-400 hover:text-red-500 transition-colors px-2">Logout</button>
                 </>
               ) : (
@@ -101,7 +98,7 @@ const Navbar: React.FC = () => {
               )}
             </div>
 
-            {/* SETTINGS GEAR (Visible on Mobile AND Desktop) */}
+            {/* SETTINGS GEAR */}
             <div className="relative" ref={settingsRef}>
               <button 
                 onClick={() => setShowSettings(!showSettings)}
@@ -126,7 +123,6 @@ const Navbar: React.FC = () => {
                     </button>
                   </div>
                   
-                  {/* Mobile Logout (Inside settings dropdown since we hid the main top bar links) */}
                   {user && (
                     <div className="md:hidden pt-4 border-t border-slate-100 dark:border-slate-800">
                       <button onClick={() => {setShowSettings(false); setShowLogoutConfirm(true);}} className="w-full flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 py-3 rounded-xl transition-colors">
@@ -138,23 +134,22 @@ const Navbar: React.FC = () => {
                 </div>
               )}
             </div>
-
           </div>
         </div>
       </nav>
 
-      {/* --- MOBILE BOTTOM TAB BAR (Hidden on Desktop) --- */}
-      {/* Only show bottom bar if the user is logged in, to keep the landing page clean for guests */}
-      {user && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 pb-safe pt-2 px-6 z-50">
+      {/* --- MOBILE BOTTOM TAB BAR --- */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 pb-safe pt-2 px-6 z-50">
+        
+        {user ? (
+          // LOGGED IN VIEW
           <div className="flex justify-between items-center pb-2">
-            
-            <Link to="/" className={`flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
+            <Link to="/" className={`flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
               <ShoppingBag className={`h-6 w-6 ${isActive('/') ? 'fill-indigo-100 dark:fill-indigo-900/30' : ''}`} />
               <span className="text-[10px] font-black uppercase tracking-wider">Home</span>
             </Link>
 
-            <Link to="/messages" className={`relative flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/messages') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
+            <Link to="/messages" className={`relative flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/messages') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
               <MessageSquare className={`h-6 w-6 ${isActive('/messages') ? 'fill-indigo-100 dark:fill-indigo-900/30' : ''}`} />
               <span className="text-[10px] font-black uppercase tracking-wider">Inbox</span>
               {notifications > 0 && (
@@ -164,7 +159,6 @@ const Navbar: React.FC = () => {
               )}
             </Link>
 
-            {/* Prominent Sell Button in the center */}
             <Link to="/create-listing" className="relative -top-5 flex flex-col items-center group">
               <div className="bg-indigo-600 text-white p-4 rounded-full shadow-lg shadow-indigo-200 dark:shadow-none group-active:scale-95 transition-transform">
                 <PlusCircle className="h-7 w-7" />
@@ -172,27 +166,41 @@ const Navbar: React.FC = () => {
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-900 dark:text-slate-50 mt-1">Sell</span>
             </Link>
 
-            {/* Admin shortcut if applicable */}
             {user.role === 'admin' ? (
-              <Link to="/admin" className={`flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/admin') ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
+              <Link to="/admin" className={`flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/admin') ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
                 <ShieldAlert className={`h-6 w-6 ${isActive('/admin') ? 'fill-amber-100 dark:fill-amber-900/30' : ''}`} />
                 <span className="text-[10px] font-black uppercase tracking-wider">Admin</span>
               </Link>
             ) : (
-              // Empty spacer to keep alignment if not admin
               <div className="w-10"></div> 
             )}
 
-            <Link to="/profile" className={`flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/profile') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>
+            <Link to="/profile" className={`flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/profile') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
               <User className={`h-6 w-6 ${isActive('/profile') ? 'fill-indigo-100 dark:fill-indigo-900/30' : ''}`} />
               <span className="text-[10px] font-black uppercase tracking-wider">Profile</span>
             </Link>
-
           </div>
-        </div>
-      )}
+        ) : (
+          // GUEST VIEW (Not Logged In)
+          <div className="flex justify-around items-center pb-2 px-4">
+            <Link to="/" className={`flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
+              <ShoppingBag className={`h-6 w-6 ${isActive('/') ? 'fill-indigo-100 dark:fill-indigo-900/30' : ''}`} />
+              <span className="text-[10px] font-black uppercase tracking-wider">Home</span>
+            </Link>
 
-      {/* Logout Confirmation */}
+            <Link to="/login" className={`flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/login') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
+              <LogIn className={`h-6 w-6 ${isActive('/login') ? 'fill-indigo-100 dark:fill-indigo-900/30' : ''}`} />
+              <span className="text-[10px] font-black uppercase tracking-wider">Login</span>
+            </Link>
+
+            <Link to="/register" className={`flex flex-col items-center gap-1 p-2 transition-colors ${isActive('/register') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}>
+              <UserPlus className={`h-6 w-6 ${isActive('/register') ? 'fill-indigo-100 dark:fill-indigo-900/30' : ''}`} />
+              <span className="text-[10px] font-black uppercase tracking-wider">Join</span>
+            </Link>
+          </div>
+        )}
+      </div>
+
       <ConfirmationModal
         isOpen={showLogoutConfirm}
         onClose={() => setShowLogoutConfirm(false)}
