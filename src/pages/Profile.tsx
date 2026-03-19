@@ -254,7 +254,7 @@ const Profile: React.FC = () => {
                     <div className="flex-grow">
                       <h4 className="font-bold text-slate-900 dark:text-slate-50">{tx.title}</h4>
                       <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        <span className="font-bold text-indigo-600 dark:text-indigo-400">${tx.amount.toFixed(2)}</span>
+                       <span className="font-bold text-indigo-600 dark:text-indigo-400">${Number(tx.amount).toFixed(2)}</span>
                         <div className="flex items-center gap-1">
                           <Clock className="h-3 w-3" aria-hidden="true" />
                           <span>{new Date(tx.created_at).toLocaleDateString()}</span>
