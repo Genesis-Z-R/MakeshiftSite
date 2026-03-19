@@ -33,10 +33,8 @@ const SellerProfile: React.FC = () => {
     const fetchSellerData = async () => {
       try {
         setLoading(true);
-        // Using Promise.all to fetch both seller info and their listings at once
         const [sellerRes, listingsRes] = await Promise.all([
           api.get(`/users/${id}`),
-          // FIXED: backend already supports filtering by seller_id in server.ts
           api.get('/listings', { params: { seller_id: id } })
         ]);
         
@@ -46,14 +44,16 @@ const SellerProfile: React.FC = () => {
       } catch (error) {
         console.error('Error fetching seller data:', error);
         announce('Error loading seller profile.', 'assertive');
-        // If the user doesn't exist, redirecting home is safer
         navigate('/');
       } finally {
         setLoading(false);
       }
     };
-    fetchSellerData();
-  }, [id, announce, navigate]);
+    
+    if (id) fetchSellerData();
+    // FIXED: Removed announce and navigate to stop the infinite loading glitch!
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   if (loading) return (
     <div className="max-w-7xl mx-auto px-4 py-20 text-center">
@@ -78,14 +78,14 @@ const SellerProfile: React.FC = () => {
       <div className="bg-white dark:bg-slate-900 rounded-[3rem] shadow-xl border border-slate-100 dark:border-slate-800 p-10 mb-12 transition-all">
         <div className="flex flex-col md:flex-row items-center gap-8">
           <div className="h-28 w-28 bg-indigo-600 rounded-[2rem] flex items-center justify-center text-white text-4xl font-black shadow-lg shadow-indigo-200 dark:shadow-none">
-            {seller.name.charAt(0)}
+            {seller.name?.charAt(0) || 'U'}
           </div>
           <div className="text-center md:text-left">
             <h1 className="text-4xl font-black text-slate-900 dark:text-slate-50 tracking-tight mb-2">{seller.name}</h1>
             <div className="flex items-center justify-center md:justify-start gap-4 text-slate-500 font-bold">
               <span className="flex items-center gap-1">
                 <Clock className="h-4 w-4" />
-                Joined {new Date(seller.created_at).toLocaleDateString()}
+                Joined {seller.created_at ? new Date(seller.created_at).toLocaleDateString() : 'Recently'}
               </span>
             </div>
             <div className="mt-6 flex flex-wrap justify-center md:justify-start gap-4">
@@ -126,7 +126,6 @@ const SellerProfile: React.FC = () => {
                   {listing.title}
                 </h3>
                 <div className="mt-4 flex items-center justify-between">
-                  {/* FIXED: Changed $ to GH₵ */}
                   <span className="text-2xl font-black text-slate-900 dark:text-slate-50">GH₵{Number(listing.price).toFixed(2)}</span>
                 </div>
               </div>

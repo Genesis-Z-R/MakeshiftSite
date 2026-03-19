@@ -456,7 +456,7 @@ async function startServer() {
     }
   });
 
-  // FIXED: Join with users table to get the admin's name
+ // FIXED: Join with users table to get the admin's name AND hide after 7 days
   app.get('/api/warnings', authenticate, async (req: any, res) => {
     try {
       const result = await pool.query(`
@@ -464,6 +464,7 @@ async function startServer() {
         FROM warnings w 
         JOIN users u ON w.admin_id = u.id 
         WHERE w.user_id = $1 
+        AND w.created_at > NOW() - INTERVAL '7 days'
         ORDER BY w.created_at DESC
       `, [req.user.id]);
       res.json(result.rows || []);
@@ -472,13 +473,15 @@ async function startServer() {
     }
   });
 
-  // --- STUBS ---
+ // --- USER DATA ROUTE (Replaces the old STUB) ---
   app.get('/api/users/:id', async (req, res) => {
     try {
-      const result = await pool.query('SELECT id, name, email, avatar_url FROM users WHERE id = $1', [req.params.id]);
-      res.json(result.rows[0] || { name: 'Campus Seller' });
+      const result = await pool.query('SELECT id, name, email, role, created_at FROM users WHERE id = $1', [req.params.id]);
+      const user = result.rows[0];
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      res.json(user);
     } catch (err) {
-      res.json({ name: 'Campus Seller' });
+      res.status(500).json({ error: 'Failed to fetch user' });
     }
   });
 
