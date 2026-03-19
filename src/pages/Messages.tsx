@@ -171,8 +171,7 @@ const Messages: React.FC = () => {
 
   return (
     // Responsive Height: Uses dynamic viewport height (dvh) on mobile to prevent the browser's address bar from hiding the input
-    <div className="max-w-6xl mx-auto h-[calc(100dvh-10rem)] md:h-[calc(100vh-12rem)] flex bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors">
-      
+    <div className="max-w-6xl mx-auto h-[calc(100dvh-15rem)] md:h-[calc(100vh-12rem)] mb-24 md:mb-0 flex bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors">
       {/* SIDEBAR: Hidden on mobile IF a conversation is selected */}
       <div className={`${selectedConv ? 'hidden md:flex' : 'flex'} w-full md:w-1/3 border-r-0 md:border-r border-slate-100 dark:border-slate-800 flex-col bg-white dark:bg-slate-900`}>
         <div className="p-6 border-b border-slate-100 dark:border-slate-800">
