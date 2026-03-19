@@ -4,6 +4,7 @@ import { useSocket } from '../context/SocketContext';
 import api from '../services/api';
 import { format } from 'date-fns';
 import { Send, MessageSquare } from 'lucide-react';
+import { Send, MessageSquare, AlertTriangle } from 'lucide-react';
 
 interface Message {
   id: number;
@@ -153,6 +154,23 @@ const Messages: React.FC = () => {
       console.error('Error sending message:', error);
     }
   };
+  const handleReport = async () => {
+    if (!selectedConv) return;
+    
+    const reason = window.prompt(`Why are you reporting ${selectedConv.other_user_name || 'this user'}?`);
+    if (!reason || !reason.trim()) return;
+
+    try {
+      await api.post('/reports', {
+        reported_id: selectedConv.other_user_id,
+        reason: reason
+      });
+      alert('Report submitted successfully. Our admin team will review this shortly.');
+    } catch (error) {
+      console.error('Error reporting user:', error);
+      alert('Failed to submit report. Please try again.');
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto h-[calc(100vh-12rem)] flex bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors">
@@ -209,10 +227,7 @@ const Messages: React.FC = () => {
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col bg-slate-50 dark:bg-black/20">
-        {selectedConv ? (
-          <>
-            <div className="p-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <d<div className="p-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black">
                   {(selectedConv.other_user_name ? selectedConv.other_user_name.charAt(0) : 'U').toUpperCase()}
@@ -226,7 +241,18 @@ const Messages: React.FC = () => {
                   </p>
                 </div>
               </div>
+              
+              {/* NEW REPORT BUTTON */}
+              <button 
+                onClick={handleReport}
+                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
+                title="Report User"
+              >
+                <AlertTriangle className="w-5 h-5" />
+              </button>
             </div>
+
+            
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {Array.isArray(messages) && messages.map((msg, idx) => {
