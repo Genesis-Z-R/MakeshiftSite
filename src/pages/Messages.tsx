@@ -3,7 +3,6 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api';
 import { format } from 'date-fns';
-import { Send, MessageSquare } from 'lucide-react';
 import { Send, MessageSquare, AlertTriangle } from 'lucide-react';
 
 interface Message {
@@ -30,8 +29,7 @@ interface Conversation {
 
 const Messages: React.FC = () => {
   const { user } = useAuth();
-  // FIXED: Destructure clearNotifications from the socket context
-  const { socket, clearNotifications } = useSocket(); 
+  const { socket, clearNotifications } = useSocket() as any; 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -48,7 +46,6 @@ const Messages: React.FC = () => {
     scrollToBottom();
   }, [messages, isTyping]);
 
-  // FIXED: Clear notification badge immediately when visiting the messages page
   useEffect(() => {
     if (clearNotifications) {
       clearNotifications();
@@ -86,7 +83,6 @@ const Messages: React.FC = () => {
         }
         fetchConversations();
         
-        // FIXED: Keep notifications at 0 if we are actively on the messages page
         if (clearNotifications) {
           clearNotifications();
         }
@@ -154,6 +150,7 @@ const Messages: React.FC = () => {
       console.error('Error sending message:', error);
     }
   };
+
   const handleReport = async () => {
     if (!selectedConv) return;
     
@@ -227,7 +224,10 @@ const Messages: React.FC = () => {
       </div>
 
       {/* Chat Area */}
-      <d<div className="p-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+      <div className="flex-1 flex flex-col bg-slate-50 dark:bg-black/20">
+        {selectedConv ? (
+          <>
+            <div className="p-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black">
                   {(selectedConv.other_user_name ? selectedConv.other_user_name.charAt(0) : 'U').toUpperCase()}
@@ -241,8 +241,8 @@ const Messages: React.FC = () => {
                   </p>
                 </div>
               </div>
-              
-              {/* NEW REPORT BUTTON */}
+
+              {/* REPORT BUTTON PLACED CORRECTLY HERE */}
               <button 
                 onClick={handleReport}
                 className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
@@ -251,8 +251,6 @@ const Messages: React.FC = () => {
                 <AlertTriangle className="w-5 h-5" />
               </button>
             </div>
-
-            
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {Array.isArray(messages) && messages.map((msg, idx) => {

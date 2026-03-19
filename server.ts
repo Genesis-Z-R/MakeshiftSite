@@ -198,6 +198,48 @@ async function startServer() {
     }
   });
 
+  app.put('/api/listings/:id', authenticate, upload.single('image'), async (req: any, res) => {
+    const { title, description, price, category, status } = req.body;
+    try {
+      const listingResult = await pool.query('SELECT * FROM listings WHERE id = $1', [req.params.id]);
+      const listing = listingResult.rows[0];
+      
+      if (!listing || listing.seller_id !== req.user.id) return res.status(403).json({ error: 'Unauthorized' });
+
+      let image_url = req.body.image_url;
+      if (req.file) {
+        const fileName = `${Date.now()}-${req.file.originalname.replace(/\s/g, '_')}`;
+        const { error } = await supabase.storage.from('listing-images').upload(fileName, req.file.buffer, { contentType: req.file.mimetype });
+        if (error) throw error;
+        const { data } = supabase.storage.from('listing-images').getPublicUrl(fileName);
+        image_url = data.publicUrl;
+      }
+
+      await pool.query(
+        'UPDATE listings SET title = $1, description = $2, price = $3, category = $4, image_url = $5, status = $6 WHERE id = $7',
+        [title, description, price, category, image_url, status, req.params.id]
+      );
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to update listing' });
+    }
+  });
+
+  app.delete('/api/listings/:id', authenticate, async (req: any, res) => {
+    try {
+      const listingResult = await pool.query('SELECT * FROM listings WHERE id = $1', [req.params.id]);
+      const listing = listingResult.rows[0];
+      
+      if (!listing) return res.status(404).json({ error: 'Not found' });
+      if (listing.seller_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
+
+      await pool.query('DELETE FROM listings WHERE id = $1', [req.params.id]);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to delete listing' });
+    }
+  });
+
   // --- CART & CHECKOUT ROUTES ---
   app.get('/api/cart', authenticate, async (req: any, res) => {
     try {
@@ -414,6 +456,7 @@ async function startServer() {
     }
   });
 
+  // FIXED: Join with users table to get the admin's name
   app.get('/api/warnings', authenticate, async (req: any, res) => {
     try {
       const result = await pool.query(`
