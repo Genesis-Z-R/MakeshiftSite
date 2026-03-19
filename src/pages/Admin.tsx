@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { useAccessibility } from '../context/AccessibilityContext';
-import { Shield, Users, Package, Trash2, AlertCircle, Activity, MessageSquare, CreditCard, Clock, Flag, AlertTriangle } from 'lucide-react';
+import { Shield, Users, Package, Trash2, Activity, MessageSquare, CreditCard, Clock, Flag, AlertTriangle } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { useSocket } from '../context/SocketContext';
 
@@ -226,7 +226,21 @@ const Admin: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-right">
                       {r.status === 'pending' && (
-                        <button onClick={() => resolveReport(r.id)} className="text-[10px] font-black uppercase text-indigo-600 hover:underline">Resolve</button>
+                        <div className="flex items-center justify-end gap-4">
+                          {/* FIXED: Issue Warning button restored here! */}
+                          <button 
+                            onClick={() => setWarningUserId(r.reported_id)} 
+                            className="text-[10px] font-black uppercase tracking-widest text-amber-600 hover:text-amber-500 transition-colors"
+                          >
+                            Issue Warning
+                          </button>
+                          <button 
+                            onClick={() => resolveReport(r.id)} 
+                            className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-500 transition-colors"
+                          >
+                            Mark Resolved
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -238,7 +252,6 @@ const Admin: React.FC = () => {
 
         {activeTab === 'errors' && (
           <div className="p-6 space-y-4 max-h-[600px] overflow-y-auto">
-            {/* FIX: Defensive map for errors */}
             {(Array.isArray(stats?.recentErrors) ? stats.recentErrors : []).map((err, i) => (
               <div key={i} className="p-4 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/20">
                 <div className="flex justify-between mb-2">
