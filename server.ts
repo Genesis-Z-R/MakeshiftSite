@@ -46,13 +46,13 @@ async function startServer() {
   const socketUsers = new Map<string, string>();
 
   // --- SOCKET.IO LOGIC ---
+  // --- SOCKET.IO LOGIC ---
   io.on('connection', (socket) => {
     socket.on('authenticate', (userId: string) => {
       userSockets.set(userId, socket.id);
       socketUsers.set(socket.id, userId);
     });
 
-    // FIXED: Properly placed inside the connection block and handles both sender/receiver
     socket.on('send_message', (data) => {
       const receiverSocketId = userSockets.get(data.receiver_id);
       const senderSocketId = userSockets.get(data.sender_id);
@@ -62,6 +62,14 @@ async function startServer() {
       }
       if (senderSocketId) {
         io.to(senderSocketId).emit('new_message', data);
+      }
+    });
+
+    // NEW: Handle typing indicators
+    socket.on('typing', (data) => {
+      const receiverSocketId = userSockets.get(data.receiver_id);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit('typing', data);
       }
     });
 

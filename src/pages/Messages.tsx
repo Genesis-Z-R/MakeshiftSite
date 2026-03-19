@@ -34,7 +34,9 @@ const Messages: React.FC = () => {
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -42,36 +44,14 @@ const Messages: React.FC = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isTyping]);
 
+  // FIXED: No more manual grouping. The backend handles this perfectly now.
   const fetchConversations = async () => {
     if (!user) return;
     try {
       const response = await api.get('/messages');
-      const rawMessages: Message[] = Array.isArray(response.data) ? response.data : [];
-      
-      const convs: Record<string, Conversation> = {};
-      
-      rawMessages.forEach(msg => {
-        const isSender = msg.sender_id === user.id;
-        const otherId = isSender ? msg.receiver_id : msg.sender_id;
-        const otherName = isSender ? (msg.receiver_name || 'User') : (msg.sender_name || 'User');
-        const key = `${otherId}_${msg.listing_id}`;
-
-        if (!convs[key]) {
-          convs[key] = {
-            other_user_id: otherId,
-            other_user_name: otherName,
-            listing_id: msg.listing_id,
-            listing_title: msg.listing_title || 'Unknown Listing',
-            last_message: msg.content,
-            last_message_time: msg.created_at,
-            unread_count: 0
-          };
-        }
-      });
-
-      setConversations(Object.values(convs));
+      setConversations(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching conversations:', error);
       setConversations([]);
@@ -82,28 +62,38 @@ const Messages: React.FC = () => {
     fetchConversations();
   }, [user]);
 
-  // FIXED: Removed the duplicate Socket listener block. Only one is needed.
+  // FIXED: Real-time and Typing listeners
   useEffect(() => {
     if (socket) {
-      socket.on('new_message', (message: Message) => {
-        // ONLY append the message if it belongs to the conversation currently open
+      const handleNewMessage = (message: Message) => {
         if (
           selectedConv &&
           Number(message.listing_id) === Number(selectedConv.listing_id) &&
           (message.sender_id === selectedConv.other_user_id || message.receiver_id === selectedConv.other_user_id)
         ) {
           setMessages(prev => {
-            // Prevent duplicate messages if the socket sends it twice
             if (prev.find(m => m.id === message.id)) return prev;
             return [...prev, message];
           });
+          setIsTyping(false); // Stop typing indicator if they sent the message
         }
-        // Always refresh the sidebar to show the latest snippet
         fetchConversations();
-      });
+      };
+
+      const handleTyping = (data: any) => {
+        if (selectedConv && data.sender_id === selectedConv.other_user_id && Number(data.listing_id) === Number(selectedConv.listing_id)) {
+          setIsTyping(true);
+          clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 2000);
+        }
+      };
+
+      socket.on('new_message', handleNewMessage);
+      socket.on('typing', handleTyping);
 
       return () => {
-        socket.off('new_message');
+        socket.off('new_message', handleNewMessage);
+        socket.off('typing', handleTyping);
       };
     }
   }, [socket, selectedConv]);
@@ -118,6 +108,19 @@ const Messages: React.FC = () => {
     }
   };
 
+  // NEW: Emits typing event to socket
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
+    if (socket && selectedConv && user) {
+      socket.emit('typing', {
+        sender_id: user.id,
+        receiver_id: selectedConv.other_user_id,
+        listing_id: selectedConv.listing_id
+      });
+    }
+  };
+
+  // FIXED: Actually emits the message to the socket for real-time
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedConv || !user) return;
@@ -129,20 +132,15 @@ const Messages: React.FC = () => {
         content: newMessage
       };
 
-      await api.post('/messages', messageData);
+      const response = await api.post('/messages', messageData);
+      const savedMsg = response.data;
       
-      const optimisticMsg: Message = {
-        id: Date.now(),
-        sender_id: user.id,
-        receiver_id: selectedConv.other_user_id,
-        listing_id: selectedConv.listing_id,
-        content: newMessage,
-        created_at: new Date().toISOString()
-      };
+      // Emit to Socket for Real-Time delivery
+      if (socket) {
+        socket.emit('send_message', savedMsg);
+      }
 
-      setMessages(prev => [...prev, optimisticMsg]);
       setNewMessage('');
-      fetchConversations();
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -164,6 +162,7 @@ const Messages: React.FC = () => {
                 onClick={() => {
                   setSelectedConv(conv);
                   fetchMessages(conv);
+                  setIsTyping(false);
                 }}
                 className={`w-full p-5 flex items-start gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all ${
                   selectedConv?.other_user_id === conv.other_user_id && selectedConv?.listing_id === conv.listing_id
@@ -241,6 +240,18 @@ const Messages: React.FC = () => {
                   </div>
                 );
               })}
+              
+              {/* TYPING INDICATOR */}
+              {isTyping && (
+                <div className="flex justify-start animate-in fade-in duration-300">
+                  <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 rounded-[1.5rem] rounded-tl-none shadow-sm flex items-center gap-1.5">
+                    <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              )}
+              
               <div ref={messagesEndRef} />
             </div>
 
@@ -249,7 +260,7 @@ const Messages: React.FC = () => {
                 <input
                   type="text"
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={handleInputChange}
                   placeholder="Type your message..."
                   className="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-2xl px-6 py-4 text-sm font-bold text-slate-900 dark:text-slate-50 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 transition-all placeholder:text-slate-400"
                 />
