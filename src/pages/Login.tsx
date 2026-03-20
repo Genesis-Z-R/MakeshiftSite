@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { supabase } from '../lib/supabase';
 import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
@@ -9,7 +9,9 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  
   const { announce } = useAccessibility();
+  const navigate = useNavigate(); // Bring back the normal router!
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -17,9 +19,7 @@ const Login: React.FC = () => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-          redirectTo: window.location.origin
-        }
+        options: { redirectTo: window.location.origin }
       });
       if (error) throw error;
     } catch (err: any) {
@@ -32,22 +32,20 @@ const Login: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    
     try {
+      // 1. Send password to Supabase
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       
+      // 2. Success! Smoothly slide over to the homepage
       announce('Login successful! Loading marketplace...');
-      
-      // CRITICAL FIX: The Hard Redirect. 
-      // This forces the browser to completely rebuild the app state, eliminating the freeze.
-      window.location.hash = '#/';
-      window.location.reload();
+      navigate('/');
       
     } catch (err: any) {
-      const msg = err.message || 'Login failed';
-      setError(msg);
-      announce(msg, 'assertive');
-      setLoading(false); // Only reset if there's an error
+      setError(err.message || 'Login failed. Please check your credentials.');
+      announce(err.message || 'Login failed', 'assertive');
+      setLoading(false); // Reset the button so you can try again
     }
   };
 

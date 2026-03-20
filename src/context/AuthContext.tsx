@@ -21,46 +21,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchLiveUser = async (supabaseUser: SupabaseUser | null) => {
-    if (!supabaseUser) {
-      setUser(null);
-      return;
-    }
-
-    let liveUser: User = {
+  // FIXED: Build the user instantly from the session data. 
+  // No extra database queries means zero chance of freezing.
+  const buildUser = (supabaseUser: SupabaseUser | null): User | null => {
+    if (!supabaseUser) return null;
+    return {
       id: supabaseUser.id,
       name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
       email: supabaseUser.email || '',
       role: supabaseUser.user_metadata?.role || 'student', 
     };
-
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('role, name')
-        .eq('id', supabaseUser.id)
-        .single();
-
-      if (data && !error) {
-        liveUser.role = data.role; 
-        if (data.name) liveUser.name = data.name; 
-      }
-    } catch (err) {
-      console.error("Error fetching live user data:", err);
-    }
-
-    setUser(liveUser);
   };
 
   useEffect(() => {
-    let mounted = true; // FIXED: Added safety flag to stop memory leaks and freezing
+    let mounted = true;
 
     const initializeAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        
         if (mounted) {
-          await fetchLiveUser(session?.user ?? null);
+          setUser(buildUser(session?.user ?? null));
           if (session?.access_token) {
             localStorage.setItem('token', session.access_token);
           }
@@ -74,22 +54,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!mounted) return;
-      
-      await fetchLiveUser(session?.user ?? null);
-      
-      if (session?.access_token) {
-        localStorage.setItem('token', session.access_token);
-      } else {
-        localStorage.removeItem('token');
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) {
+        setUser(buildUser(session?.user ?? null));
+        if (session?.access_token) {
+          localStorage.setItem('token', session.access_token);
+        } else {
+          localStorage.removeItem('token');
+        }
+        setLoading(false);
       }
-      
-      if (mounted) setLoading(false);
     });
 
     return () => {
-      mounted = false; 
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -109,8 +87,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
