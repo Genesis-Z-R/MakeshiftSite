@@ -115,7 +115,7 @@ const Cart: React.FC = () => {
         </div>
       </div>
 
-      {/* FIXED: Shifted up by 72px on mobile to clear the bottom navigation tab bar */}
+      {/* Floating Action Bar offset on mobile */}
       <div className="fixed bottom-[72px] md:bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 p-4 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] dark:shadow-none">
         <div className="max-w-3xl mx-auto">
           <div className="flex justify-between items-end mb-4 px-2">

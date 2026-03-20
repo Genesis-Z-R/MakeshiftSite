@@ -49,7 +49,9 @@ const Admin: React.FC = () => {
   const [warningUserId, setWarningUserId] = useState<string | null>(null);
   const [warningMessage, setWarningMessage] = useState('');
   const [sendingWarning, setSendingWarning] = useState(false);
-  const { onlineUsers = [] } = useSocket();
+  
+  // Safely fallback to an empty array if the socket context is missing
+  const { onlineUsers = [] } = useSocket() || {};
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
@@ -66,13 +68,14 @@ const Admin: React.FC = () => {
         api.get('/admin/reports')
       ]);
       setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
-      setStats(statsRes.data);
+      setStats(statsRes.data || null);
       setReports(Array.isArray(reportsRes.data) ? reportsRes.data : []);
       announce('Admin dashboard loaded.');
     } catch (error) {
       console.error('Error fetching admin data:', error);
       setUsers([]);
       setReports([]);
+      announce('Failed to load some dashboard data.', 'assertive');
     } finally {
       setLoading(false);
     }
@@ -127,7 +130,7 @@ const Admin: React.FC = () => {
   if (!user || user.role !== 'admin') return null;
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-[80vh] flex items-center justify-center bg-slate-50 dark:bg-slate-950">
       <div className="flex flex-col items-center gap-4">
         <div className="animate-spin h-8 w-8 border-4 border-slate-900 dark:border-white border-t-transparent rounded-full"></div>
         <p className="font-black text-[10px] text-slate-400 uppercase tracking-widest">Initializing Console...</p>
@@ -155,7 +158,7 @@ const Admin: React.FC = () => {
       <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 overflow-x-auto no-scrollbar">
         <div className="flex gap-4 p-4 min-w-max max-w-7xl mx-auto">
           {[
-            { label: 'Users', val: stats?.totalUsers, icon: <Users className="h-4 w-4" />, sub: `${onlineUsers.length} Live` },
+            { label: 'Users', val: stats?.totalUsers, icon: <Users className="h-4 w-4" />, sub: `${(onlineUsers || []).length} Live` },
             { label: 'Reports', val: stats?.totalReports, icon: <Flag className="h-4 w-4" />, danger: (stats?.totalReports || 0) > 0 },
             { label: 'Listings', val: stats?.totalListings, icon: <Package className="h-4 w-4" /> },
             { label: 'Messages', val: stats?.totalMessages, icon: <MessageSquare className="h-4 w-4" /> },
@@ -169,7 +172,8 @@ const Admin: React.FC = () => {
                 {s.sub && <span className="text-[8px] font-black text-green-500 uppercase">{s.sub}</span>}
               </div>
               <div>
-                <h3 className={`text-xl font-black leading-none mb-1 ${s.danger ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>{s.val || 0}</h3>
+                {/* Fallback to 0 if the value is missing */}
+                <h3 className={`text-xl font-black leading-none mb-1 ${s.danger ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>{s.val ?? 0}</h3>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
               </div>
             </div>
@@ -193,78 +197,86 @@ const Admin: React.FC = () => {
       {/* Main Content Area */}
       <div className="flex-1 w-full max-w-7xl mx-auto md:px-4 md:py-6">
         
-        {/* USERS LIST (Replaced Table) */}
+        {/* USERS LIST */}
         {activeTab === 'users' && (
           <div className="bg-white dark:bg-slate-900 md:rounded-2xl md:border border-y border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
-            {(Array.isArray(users) ? users : []).map((u) => (
-              <div key={u.id} className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-10 w-10 bg-slate-900 dark:bg-white rounded-full flex items-center justify-center text-white dark:text-slate-900 text-sm font-black shrink-0">
-                    {u.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{u.name}</p>
-                      {u.role === 'admin' && (
-                        <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded uppercase bg-slate-900 dark:bg-white text-white dark:text-slate-900">Admin</span>
-                      )}
+            {users.length === 0 ? (
+               <div className="p-12 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                 No users found
+               </div>
+            ) : (
+              users.map((u) => (
+                <div key={u.id} className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-10 w-10 bg-slate-900 dark:bg-white rounded-full flex items-center justify-center text-white dark:text-slate-900 text-sm font-black shrink-0">
+                      {/* CRASH FIX: Safe fallback if name is empty */}
+                      {(u.name || 'U').charAt(0).toUpperCase()}
                     </div>
-                    <p className="text-[10px] font-bold text-slate-400 truncate uppercase tracking-widest">{u.email}</p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{u.name || 'Unknown User'}</p>
+                        {u.role === 'admin' && (
+                          <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded uppercase bg-slate-900 dark:bg-white text-white dark:text-slate-900">Admin</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-bold text-slate-400 truncate uppercase tracking-widest">{u.email || 'No email'}</p>
+                    </div>
                   </div>
+                  {u.role !== 'admin' && (
+                    <div className="flex items-center gap-2 shrink-0 ml-4">
+                      <button onClick={() => setWarningUserId(u.id)} className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors" title="Issue Warning">
+                        <AlertTriangle className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => setUserToDelete(u.id)} className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-500 hover:text-red-700 transition-colors" title="Delete User">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {u.role !== 'admin' && (
-                  <div className="flex items-center gap-2 shrink-0 ml-4">
-                    <button onClick={() => setWarningUserId(u.id)} className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
-                      <AlertTriangle className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => setUserToDelete(u.id)} className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-500 hover:text-red-700 transition-colors">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
 
-        {/* REPORTS LIST (Replaced Table) */}
+        {/* REPORTS LIST */}
         {activeTab === 'reports' && (
           <div className="bg-white dark:bg-slate-900 md:rounded-2xl md:border border-y border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
-            {(Array.isArray(reports) ? reports : []).map((r) => (
-              <div key={r.id} className="p-4 flex flex-col gap-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Reported User</span>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{r.reported_name}</h4>
+            {reports.length === 0 ? (
+              <div className="p-12 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                No active reports
+              </div>
+            ) : (
+              reports.map((r) => (
+                <div key={r.id} className="p-4 flex flex-col gap-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Reported User</span>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{r.reported_name || 'Unknown'}</h4>
+                    </div>
+                    <span className={`text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest ${r.status === 'pending' ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                      {r.status || 'Unknown'}
+                    </span>
                   </div>
-                  <span className={`text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest ${r.status === 'pending' ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
-                    {r.status}
-                  </span>
-                </div>
-                
-                <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <p className="text-sm text-slate-600 dark:text-slate-300">{r.reason}</p>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-2">
-                    Reported by: {r.reporter_name}
-                  </p>
-                </div>
+                  
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                    <p className="text-sm text-slate-600 dark:text-slate-300">{r.reason}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-2">
+                      Reported by: {r.reporter_name || 'Anonymous'}
+                    </p>
+                  </div>
 
-                {r.status === 'pending' && (
-                  <div className="flex gap-2 mt-1">
-                    <button onClick={() => setWarningUserId(r.reported_id)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                      Issue Warning
-                    </button>
-                    <button onClick={() => resolveReport(r.id)} className="flex-1 py-3 bg-slate-900 dark:bg-white rounded-xl text-[10px] font-black uppercase tracking-widest text-white dark:text-slate-900 flex justify-center items-center gap-1">
-                      <CheckCircle className="h-3 w-3" /> Resolve
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-            {reports.length === 0 && (
-              <div className="p-8 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">
-                No reports found
-              </div>
+                  {r.status === 'pending' && (
+                    <div className="flex gap-2 mt-1">
+                      <button onClick={() => setWarningUserId(r.reported_id)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                        Issue Warning
+                      </button>
+                      <button onClick={() => resolveReport(r.id)} className="flex-1 py-3 bg-slate-900 dark:bg-white rounded-xl text-[10px] font-black uppercase tracking-widest text-white dark:text-slate-900 flex justify-center items-center gap-1 hover:opacity-90 transition-opacity">
+                        <CheckCircle className="h-3 w-3" /> Resolve
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
             )}
           </div>
         )}
@@ -272,29 +284,32 @@ const Admin: React.FC = () => {
         {/* ERRORS LIST */}
         {activeTab === 'errors' && (
           <div className="p-4 md:p-0 space-y-3">
-            {(Array.isArray(stats?.recentErrors) ? stats.recentErrors : []).map((err, i) => (
-              <div key={i} className="bg-red-50 dark:bg-red-900/10 p-4 rounded-2xl border border-red-100 dark:border-red-900/20">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 flex items-center gap-1">
-                    <Activity className="h-3 w-3" /> Incident
-                  </span>
-                  <span className="text-[9px] font-bold text-slate-400">{new Date(err.timestamp).toLocaleTimeString()}</span>
-                </div>
-                <p className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1">{err.message}</p>
-                {err.path && <p className="text-[10px] font-mono text-red-500 break-all">{err.path}</p>}
-              </div>
-            ))}
-            {(!stats?.recentErrors || stats.recentErrors.length === 0) && (
+            {(!stats?.recentErrors || stats.recentErrors.length === 0) ? (
               <div className="py-20 text-center">
                 <Activity className="h-12 w-12 text-slate-200 dark:text-slate-800 mx-auto mb-4" />
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">All Systems Nominal</p>
               </div>
+            ) : (
+              stats.recentErrors.map((err, i) => (
+                <div key={i} className="bg-red-50 dark:bg-red-900/10 p-4 rounded-2xl border border-red-100 dark:border-red-900/20">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 flex items-center gap-1">
+                      <Activity className="h-3 w-3" /> Incident
+                    </span>
+                    <span className="text-[9px] font-bold text-slate-400">
+                      {err.timestamp ? new Date(err.timestamp).toLocaleTimeString() : 'Unknown Time'}
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1">{err.message}</p>
+                  {err.path && <p className="text-[10px] font-mono text-red-500 break-all">{err.path}</p>}
+                </div>
+              ))
             )}
           </div>
         )}
       </div>
 
-      {/* WARNING MODAL (Native Bottom-Sheet/Center Feel) */}
+      {/* WARNING MODAL */}
       {warningUserId && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-900 w-full md:max-w-md p-6 rounded-t-3xl md:rounded-3xl shadow-2xl border-t md:border border-slate-100 dark:border-slate-800 animate-in slide-in-from-bottom-4 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200">
