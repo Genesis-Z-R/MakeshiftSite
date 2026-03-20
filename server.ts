@@ -215,21 +215,37 @@ async function startServer() {
   });
 
   app.put('/api/listings/:id', authenticate, upload.single('image'), async (req: any, res) => {
-    const { title, description, price, category, status } = req.body;
-    try {
-      const listingResult = await pool.query('SELECT * FROM listings WHERE id = $1', [req.params.id]);
-      const listing = listingResult.rows[0];
-      
-      if (!listing || listing.seller_id !== req.user.id) return res.status(403).json({ error: 'Unauthorized' });
+  const { title, description, price, category, status } = req.body;
+  try {
+    // 1. Get the current listing first to see the existing image
+    const listingResult = await pool.query('SELECT * FROM listings WHERE id = $1', [req.params.id]);
+    const listing = listingResult.rows[0];
+    
+    if (!listing) return res.status(404).json({ error: 'Listing not found' });
+    if (listing.seller_id !== req.user.id) return res.status(403).json({ error: 'Unauthorized' });
 
-      let image_url = req.body.image_url;
-      if (req.file) {
-        const fileName = `${Date.now()}-${req.file.originalname.replace(/\s/g, '_')}`;
-        const { error } = await supabase.storage.from('listing-images').upload(fileName, req.file.buffer, { contentType: req.file.mimetype });
-        if (error) throw error;
-        const { data } = supabase.storage.from('listing-images').getPublicUrl(fileName);
-        image_url = data.publicUrl;
-      }
+    // 2. ONLY update image_url if a new file was actually uploaded
+    let image_url = listing.image_url; // Default to the old one
+    if (req.file) {
+      const fileName = `${Date.now()}-${req.file.originalname.replace(/\s/g, '_')}`;
+      const { error } = await supabase.storage.from('listing-images').upload(fileName, req.file.buffer, { contentType: req.file.mimetype });
+      if (error) throw error;
+      const { data } = supabase.storage.from('listing-images').getPublicUrl(fileName);
+      image_url = data.publicUrl;
+    }
+
+    // 3. Update the database
+    await pool.query(
+      'UPDATE listings SET title = $1, description = $2, price = $3, category = $4, image_url = $5, status = $6 WHERE id = $7',
+      [title, description, price, category, image_url, status || listing.status, req.params.id]
+    );
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Update Error:", err);
+    res.status(500).json({ error: 'Failed to update listing' });
+  }
+});
 
       await pool.query(
         'UPDATE listings SET title = $1, description = $2, price = $3, category = $4, image_url = $5, status = $6 WHERE id = $7',
