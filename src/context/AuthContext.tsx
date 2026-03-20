@@ -21,14 +21,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // NEW: This async function fetches the real, live data from your database
   const fetchLiveUser = async (supabaseUser: SupabaseUser | null) => {
     if (!supabaseUser) {
       setUser(null);
       return;
     }
 
-    // Default fallback values from their auth session
     let liveUser: User = {
       id: supabaseUser.id,
       name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
@@ -37,15 +35,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     try {
-      // Query the actual 'users' table to see if you manually gave them admin rights
       const { data, error } = await supabase
         .from('users')
-        .select('role, name') // Grab their true role and name
+        .select('role, name')
         .eq('id', supabaseUser.id)
         .single();
 
       if (data && !error) {
-        liveUser.role = data.role; // Override with the database role!
+        liveUser.role = data.role; 
         if (data.name) liveUser.name = data.name; 
       }
     } catch (err) {
@@ -56,20 +53,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    let mounted = true; // Safety flag to prevent memory leaks and hanging
+
     const initializeAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      await fetchLiveUser(session?.user ?? null);
-      
-      if (session?.access_token) {
-        localStorage.setItem('token', session.access_token);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (mounted) {
+          await fetchLiveUser(session?.user ?? null);
+          if (session?.access_token) {
+            localStorage.setItem('token', session.access_token);
+          }
+        }
+      } catch (error) {
+        console.error("Auth initialization error:", error);
+      } finally {
+        if (mounted) setLoading(false);
       }
-      setLoading(false);
     };
 
     initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setLoading(true); // Briefly show loading while we fetch the live role
+      if (!mounted) return;
+      
+      setLoading(true); 
       await fetchLiveUser(session?.user ?? null);
       
       if (session?.access_token) {
@@ -77,10 +85,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         localStorage.removeItem('token');
       }
-      setLoading(false);
+      
+      if (mounted) setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false; // Clean up the flag when the component is destroyed
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {

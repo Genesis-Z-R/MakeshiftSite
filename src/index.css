@@ -16,6 +16,13 @@
     @apply bg-slate-950 text-slate-50;
   }
 
+  /* CRITICAL FIX: Prevent mobile bottom nav from overlapping content */
+  @media (max-width: 768px) {
+    body {
+      padding-bottom: 90px;
+    }
+  }
+
   /* High Contrast Mode */
   .high-contrast body {
     @apply bg-black! text-white!;
@@ -77,19 +84,12 @@
     @apply w-full px-5 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium;
   }
 
+  /* Smooth Scrolling for Chat and Horizontal Lists */
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
-  }
-}
-
-/* Add this to the bottom of src/index.css */
-@media (max-width: 768px) {
-  body {
-    /* Prevents the bottom tab bar from covering up content on mobile */
-    padding-bottom: 80px; 
   }
 }
