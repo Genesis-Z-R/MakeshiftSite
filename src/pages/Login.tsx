@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { supabase } from '../lib/supabase';
 import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
@@ -9,21 +8,11 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [localLoading, setLocalLoading] = useState(false);
-  
-  const { user } = useAuth(); // NEW: Pull the global user state
+  const [loading, setLoading] = useState(false);
   const { announce } = useAccessibility();
-  const navigate = useNavigate();
-
-  // FIXED: Smoothly redirect ONLY when the global context is fully updated
-  useEffect(() => {
-    if (user) {
-      navigate('/');
-    }
-  }, [user, navigate]);
 
   const handleGoogleLogin = async () => {
-    setLocalLoading(true);
+    setLoading(true);
     setError('');
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -33,27 +22,32 @@ const Login: React.FC = () => {
         }
       });
       if (error) throw error;
-      // Note: No finally block setting loading to false here, so the button stays in "loading" state until redirect!
     } catch (err: any) {
       setError(err.message || 'Failed to initialize Google login');
-      setLocalLoading(false);
+      setLoading(false);
     } 
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLocalLoading(true);
+    setLoading(true);
     setError('');
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      
       announce('Login successful! Loading marketplace...');
-      // Note: No navigate('/') here. The useEffect above will handle it safely!
+      
+      // CRITICAL FIX: The Hard Redirect. 
+      // This forces the browser to completely rebuild the app state, eliminating the freeze.
+      window.location.hash = '#/';
+      window.location.reload();
+      
     } catch (err: any) {
       const msg = err.message || 'Login failed';
       setError(msg);
       announce(msg, 'assertive');
-      setLocalLoading(false); // Only reset loading if it failed!
+      setLoading(false); // Only reset if there's an error
     }
   };
 
@@ -82,7 +76,7 @@ const Login: React.FC = () => {
         <div className="space-y-4 mb-6">
           <button
             onClick={handleGoogleLogin}
-            disabled={localLoading}
+            disabled={loading}
             className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 py-3 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm"
           >
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" className="h-5 w-5" />
@@ -105,7 +99,7 @@ const Login: React.FC = () => {
                 id="email"
                 type="email"
                 required
-                className="input-field pl-10"
+                className="input-field pl-10 w-full"
                 placeholder="student@university.edu"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -115,9 +109,12 @@ const Login: React.FC = () => {
           </div>
 
           <div>
-            <div className="flex justify-between items-center mb-2">
+            <div className="flex items-center justify-between mb-2">
               <label htmlFor="password" className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Password</label>
-              <Link to="/forgot-password" className="text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+              <Link 
+                to="/forgot-password" 
+                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+              >
                 Forgot password?
               </Link>
             </div>
@@ -127,7 +124,7 @@ const Login: React.FC = () => {
                 id="password"
                 type="password"
                 required
-                className="input-field pl-10"
+                className="input-field pl-10 w-full"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -138,10 +135,10 @@ const Login: React.FC = () => {
 
           <button
             type="submit"
-            disabled={localLoading}
+            disabled={loading}
             className="btn-primary w-full py-3 shadow-lg shadow-indigo-200 dark:shadow-none"
           >
-            {localLoading ? 'Logging in...' : 'Sign In'}
+            {loading ? 'Logging in...' : 'Sign In'}
           </button>
         </form>
 

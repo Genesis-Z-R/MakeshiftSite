@@ -45,9 +45,9 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const AppLayout = () => {
   const location = useLocation();
   
-  // FIXED: Smarter path matching. This catches '/login', '/login/', etc.
-  const path = location.pathname.replace(/\/$/, ''); 
-  const isAuthPage = ['/login', '/register', '/forgot-password', '/update-password'].includes(path);
+  // Smarter path matching to catch '/login', '/login/', '/Login', etc.
+  const path = location.pathname.toLowerCase();
+  const isAuthPage = ['/login', '/register', '/forgot-password', '/update-password'].some(authPath => path.includes(authPath));
 
   return (
     <div className="min-h-screen flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50 font-sans transition-colors duration-200">
