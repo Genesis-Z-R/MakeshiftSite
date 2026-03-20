@@ -35,16 +35,16 @@ const Home: React.FC = () => {
   const observer = useRef<IntersectionObserver | null>(null);
 
   const categoryItems = [
-    { name: 'Electronics', icon: <Smartphone className="h-5 w-5" /> },
-    { name: 'Fashion', icon: <Shirt className="h-5 w-5" /> },
-    { name: 'Home & Living', icon: <HomeIcon className="h-5 w-5" /> },
-    { name: 'Books & Stationery', icon: <BookOpen className="h-5 w-5" /> },
-    { name: 'Health & Beauty', icon: <HeartPulse className="h-5 w-5" /> },
-    { name: 'Food & Groceries', icon: <Utensils className="h-5 w-5" /> },
-    { name: 'Services', icon: <SettingsIcon className="h-5 w-5" /> },
-    { name: 'Sports & Fitness', icon: <Trophy className="h-5 w-5" /> },
-    { name: 'Vehicles & Transport', icon: <Car className="h-5 w-5" /> },
-    { name: 'Other', icon: <MoreHorizontal className="h-5 w-5" /> },
+    { name: 'Electronics', icon: <Smartphone className="h-4 w-4 md:h-5 md:w-5" /> },
+    { name: 'Fashion', icon: <Shirt className="h-4 w-4 md:h-5 md:w-5" /> },
+    { name: 'Home & Living', icon: <HomeIcon className="h-4 w-4 md:h-5 md:w-5" /> },
+    { name: 'Books', icon: <BookOpen className="h-4 w-4 md:h-5 md:w-5" /> },
+    { name: 'Health', icon: <HeartPulse className="h-4 w-4 md:h-5 md:w-5" /> },
+    { name: 'Food', icon: <Utensils className="h-4 w-4 md:h-5 md:w-5" /> },
+    { name: 'Services', icon: <SettingsIcon className="h-4 w-4 md:h-5 md:w-5" /> },
+    { name: 'Sports', icon: <Trophy className="h-4 w-4 md:h-5 md:w-5" /> },
+    { name: 'Vehicles', icon: <Car className="h-4 w-4 md:h-5 md:w-5" /> },
+    { name: 'Other', icon: <MoreHorizontal className="h-4 w-4 md:h-5 md:w-5" /> },
   ];
 
   const fetchListings = async (reset = false) => {
@@ -58,12 +58,7 @@ const Home: React.FC = () => {
 
       const currentOffset = reset ? 0 : offset;
       const response = await api.get('/listings', {
-        params: {
-          search,
-          category,
-          limit: LIMIT,
-          offset: currentOffset
-        }
+        params: { search, category, limit: LIMIT, offset: currentOffset }
       });
 
       const newListings = response.data;
@@ -117,18 +112,50 @@ const Home: React.FC = () => {
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-8 flex flex-col md:flex-row gap-8">
-      {/* SIDEBAR: Categories */}
-      <aside className="w-full md:w-72 shrink-0">
-        <div className="sticky top-24 bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 hidden md:block">
-          <h2 className="text-xl font-black text-slate-900 dark:text-slate-50 mb-6 tracking-tight">Categories</h2>
-          <nav className="space-y-2">
+    <div className="max-w-7xl mx-auto px-4 md:px-8 py-4 md:py-8 flex flex-col md:flex-row gap-6 md:gap-8">
+      
+      {/* MOBILE: Horizontal Categories (Top) */}
+      <div className="md:hidden -mx-4 px-4 overflow-x-auto no-scrollbar pb-2">
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleCategorySelect('All')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold whitespace-nowrap transition-all text-sm ${
+              category === 'All'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-100 dark:border-slate-800'
+            }`}
+          >
+            <ShoppingBag className="h-4 w-4" />
+            All
+          </button>
+          {categoryItems.map((cat) => (
+            <button
+              key={cat.name}
+              onClick={() => handleCategorySelect(cat.name)}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold whitespace-nowrap transition-all text-sm ${
+                category === cat.name
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-100 dark:border-slate-800'
+              }`}
+            >
+              {cat.icon}
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* DESKTOP: Vertical Sidebar (Left) */}
+      <aside className="hidden md:block w-64 shrink-0">
+        <div className="sticky top-24">
+          <h2 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 px-4">Browse Categories</h2>
+          <nav className="space-y-1">
             <button
               onClick={() => handleCategorySelect('All')}
-              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl font-bold transition-all ${
+              className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl font-bold transition-all ${
                 category === 'All'
                   ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600'
               }`}
             >
               <ShoppingBag className="h-5 w-5" />
@@ -138,10 +165,10 @@ const Home: React.FC = () => {
               <button
                 key={cat.name}
                 onClick={() => handleCategorySelect(cat.name)}
-                className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl font-bold transition-all ${
+                className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl font-bold transition-all ${
                   category === cat.name
                     ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600'
                 }`}
               >
                 {cat.icon}
@@ -150,53 +177,21 @@ const Home: React.FC = () => {
             ))}
           </nav>
         </div>
-
-        {/* MOBILE Categories Horizontal Scroll */}
-        <div className="md:hidden overflow-x-auto no-scrollbar py-2 -mx-4 px-4">
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleCategorySelect('All')}
-              className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold whitespace-nowrap transition-all ${
-                category === 'All'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-100 dark:border-slate-800'
-              }`}
-            >
-              <ShoppingBag className="h-4 w-4" />
-              All
-            </button>
-            {categoryItems.map((cat) => (
-              <button
-                key={cat.name}
-                onClick={() => handleCategorySelect(cat.name)}
-                className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold whitespace-nowrap transition-all ${
-                  category === cat.name
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-100 dark:border-slate-800'
-                }`}
-              >
-                {cat.icon}
-                {cat.name}
-              </button>
-            ))}
-          </div>
-        </div>
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 min-w-0">
-        {/* Search Bar */}
-        <div className="mb-8 md:mb-10">
-          <div className="relative max-w-2xl">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 h-6 w-6 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search for textbooks, electronics, furniture..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-20 pl-16 pr-6 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2rem] focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 outline-none transition-all text-lg font-medium shadow-sm"
-            />
-          </div>
+      <main className="flex-1 min-w-0 flex flex-col gap-6 md:gap-8">
+        
+        {/* Sleek Search Bar */}
+        <div className="relative">
+          <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search for textbooks, tech, furniture..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl py-4 pl-14 pr-6 text-sm md:text-base font-medium focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 outline-none transition-all shadow-sm placeholder:text-slate-400"
+          />
         </div>
 
         {/* Product Grid */}
@@ -221,54 +216,52 @@ const Home: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+            {/* FIXED: Switched mobile to 2 columns (grid-cols-2) for that premium native app look */}
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
               {listings.map((listing, index) => {
                 const isLastElement = index === listings.length - 1;
                 return (
-                  <div 
+                  <Link 
+                    to={`/listing/${listing.id}`}
                     key={listing.id} 
                     ref={isLastElement ? lastElementRef : null}
-                    className="group bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500"
+                    className="group flex flex-col bg-white dark:bg-slate-900 rounded-[1.5rem] md:rounded-[2rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-xl hover:border-indigo-100 dark:hover:border-indigo-900 transition-all duration-300"
                   >
-                    <Link to={`/listing/${listing.id}`} className="block relative aspect-square overflow-hidden bg-slate-100 dark:bg-slate-800">
+                    <div className="relative aspect-square bg-slate-50 dark:bg-slate-800 overflow-hidden">
                       {listing.image_url ? (
                         <img 
                           src={listing.image_url} 
                           alt={listing.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-slate-400">
-                          <ShoppingBag className="h-16 w-16 opacity-20" />
+                          <ShoppingBag className="h-10 w-10 md:h-12 md:w-12 opacity-20" />
                         </div>
                       )}
-                      <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm dark:bg-slate-900/90 px-4 py-2 rounded-2xl font-black text-indigo-600 dark:text-indigo-400 shadow-sm">
+                      
+                      {/* Floating Price Tag */}
+                      <div className="absolute bottom-2 left-2 md:bottom-3 md:left-3 bg-white/95 backdrop-blur-md dark:bg-slate-900/95 px-2.5 py-1 md:px-3 md:py-1.5 rounded-lg md:rounded-xl font-black text-indigo-600 dark:text-indigo-400 shadow-sm text-xs md:text-sm">
                         GH₵{Number(listing.price).toFixed(2)}
                       </div>
-                    </Link>
+                    </div>
                     
-                    <div className="p-6">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full">
-                          {listing.category}
-                        </span>
-                      </div>
-                      <Link to={`/listing/${listing.id}`}>
-                        <h3 className="font-bold text-lg text-slate-900 dark:text-slate-50 line-clamp-2 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors mb-2">
-                          {listing.title}
-                        </h3>
-                      </Link>
-                      <Link 
-                        to={`/seller/${listing.seller_id}`}
-                        className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors flex items-center gap-2"
-                      >
-                        <div className="w-6 h-6 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-[10px] font-black text-slate-600 dark:text-slate-400">
+                    <div className="p-3 md:p-5 flex flex-col flex-1">
+                      <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1 md:mb-2 truncate">
+                        {listing.category}
+                      </span>
+                      <h3 className="font-bold text-sm md:text-base text-slate-900 dark:text-slate-50 line-clamp-2 leading-tight mb-2 md:mb-3 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                        {listing.title}
+                      </h3>
+                      
+                      <div className="mt-auto flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                        <div className="w-5 h-5 md:w-6 md:h-6 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-[9px] md:text-[10px] font-black text-slate-600 dark:text-slate-400 shrink-0">
                           {listing.seller_name.charAt(0).toUpperCase()}
                         </div>
-                        {listing.seller_name}
-                      </Link>
+                        <span className="truncate">{listing.seller_name}</span>
+                      </div>
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
@@ -280,7 +273,7 @@ const Home: React.FC = () => {
             )}
             
             {!hasMore && listings.length > 0 && (
-              <div className="text-center py-12 text-slate-400 font-bold">
+              <div className="text-center py-8 text-xs md:text-sm text-slate-400 font-bold">
                 You've reached the end of the marketplace!
               </div>
             )}
