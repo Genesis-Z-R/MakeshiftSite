@@ -42,7 +42,7 @@ async function startServer() {
     allowEIO3: true
   });
 
-  // Track online users using STRING IDs (Supabase UUIDs)
+  // Track online users
   const userSockets = new Map<string, string>();
   const socketUsers = new Map<string, string>();
 
@@ -62,7 +62,6 @@ async function startServer() {
     socket.on('send_message', (data) => {
       const receiverSocketId = userSockets.get(data.receiver_id);
       const senderSocketId = userSockets.get(data.sender_id);
-      
       if (receiverSocketId) io.to(receiverSocketId).emit('new_message', data);
       if (senderSocketId) io.to(senderSocketId).emit('new_message', data);
     });
@@ -88,7 +87,7 @@ async function startServer() {
   }));
   app.use(express.json());
 
-  // Error logging middleware for Admin Stats
+  // Error logging middleware
   app.use((req, res, next) => {
     const originalJson = res.json;
     res.json = function(data) {
@@ -105,15 +104,13 @@ async function startServer() {
     next();
   });
 
-  // --- SUPABASE AUTHENTICATION MIDDLEWARE ---
+  // --- AUTH MIDDLEWARE ---
   const authenticate = (req: any, res: any, next: any) => {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
-    
     try {
       const decoded: any = jwt.decode(token); 
       if (!decoded) return res.status(401).json({ error: 'Invalid token' });
-      
       req.user = { 
         id: decoded.sub || decoded.id, 
         email: decoded.email,
@@ -125,18 +122,13 @@ async function startServer() {
     }
   };
 
-  // --- NEW: STRICT ADMIN MIDDLEWARE ---
   const requireAdmin = async (req: any, res: any, next: any) => {
     try {
-      // Always verify against the live database, ignoring what the frontend token says
       const result = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.id]);
-      const userRole = result.rows[0]?.role;
-
-      if (userRole !== 'admin') {
+      if (result.rows[0]?.role !== 'admin') {
         return res.status(403).json({ error: 'Forbidden: Admin access required.' });
       }
-      
-      next(); // User is confirmed admin, proceed to the route
+      next();
     } catch (err) {
       res.status(500).json({ error: 'Failed to verify admin status' });
     }
@@ -173,7 +165,7 @@ async function startServer() {
 
       const result = await pool.query(query, params);
       res.json(result.rows || []);
-    } catch (err: any) {
+    } catch (err) {
       res.status(200).json([]); 
     }
   });
@@ -194,8 +186,7 @@ async function startServer() {
   app.post('/api/listings', authenticate, upload.single('image'), async (req: any, res) => {
     try {
       const { title, description, price, category } = req.body;
-      let image_url = req.body.image_url || '';
-
+      let image_url = '';
       if (req.file) {
         const fileName = `${Date.now()}-${req.file.originalname.replace(/\s/g, '_')}`;
         const { error } = await supabase.storage.from('listing-images').upload(fileName, req.file.buffer, { contentType: req.file.mimetype });
@@ -203,57 +194,51 @@ async function startServer() {
         const { data } = supabase.storage.from('listing-images').getPublicUrl(fileName);
         image_url = data.publicUrl;
       }
-
       await pool.query(
         'INSERT INTO listings (seller_id, title, description, price, category, image_url, status) VALUES ($1, $2, $3, $4, $5, $6, $7)',
         [req.user.id, title, description, parseFloat(price), category, image_url, 'available']
       );
       res.json({ success: true });
     } catch (err) {
-      res.status(500).json({ error: 'Failed' });
+      res.status(500).json({ error: 'Failed to create listing' });
     }
   });
 
+  // FIXED: No duplicates, correct braces, and smart image persistence
   app.put('/api/listings/:id', authenticate, upload.single('image'), async (req: any, res) => {
-  const { title, description, price, category, status } = req.body;
-  try {
-    // 1. Get the current listing first to see the existing image
-    const listingResult = await pool.query('SELECT * FROM listings WHERE id = $1', [req.params.id]);
-    const listing = listingResult.rows[0];
-    
-    if (!listing) return res.status(404).json({ error: 'Listing not found' });
-    if (listing.seller_id !== req.user.id) return res.status(403).json({ error: 'Unauthorized' });
+    const { title, description, price, category, status } = req.body;
+    try {
+      const listingResult = await pool.query('SELECT * FROM listings WHERE id = $1', [req.params.id]);
+      const listing = listingResult.rows[0];
+      
+      if (!listing) return res.status(404).json({ error: 'Not found' });
+      if (listing.seller_id !== req.user.id) return res.status(403).json({ error: 'Unauthorized' });
 
-    // 2. ONLY update image_url if a new file was actually uploaded
-    let image_url = listing.image_url; // Default to the old one
-    if (req.file) {
-      const fileName = `${Date.now()}-${req.file.originalname.replace(/\s/g, '_')}`;
-      const { error } = await supabase.storage.from('listing-images').upload(fileName, req.file.buffer, { contentType: req.file.mimetype });
-      if (error) throw error;
-      const { data } = supabase.storage.from('listing-images').getPublicUrl(fileName);
-      image_url = data.publicUrl;
-    }
-
-    // 3. Update the database
-    await pool.query(
-      'UPDATE listings SET title = $1, description = $2, price = $3, category = $4, image_url = $5, status = $6 WHERE id = $7',
-      [title, description, price, category, image_url, status || listing.status, req.params.id]
-    );
-    
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Update Error:", err);
-    res.status(500).json({ error: 'Failed to update listing' });
-  }
-});
+      let image_url = listing.image_url;
+      if (req.file) {
+        const fileName = `${Date.now()}-${req.file.originalname.replace(/\s/g, '_')}`;
+        const { error: storageError } = await supabase.storage.from('listing-images').upload(fileName, req.file.buffer, { contentType: req.file.mimetype });
+        if (storageError) throw storageError;
+        const { data: publicUrlData } = supabase.storage.from('listing-images').getPublicUrl(fileName);
+        image_url = publicUrlData.publicUrl;
+      }
 
       await pool.query(
         'UPDATE listings SET title = $1, description = $2, price = $3, category = $4, image_url = $5, status = $6 WHERE id = $7',
-        [title, description, price, category, image_url, status, req.params.id]
+        [
+          title || listing.title, 
+          description || listing.description, 
+          price ? parseFloat(price) : listing.price, 
+          category || listing.category, 
+          image_url, 
+          status || listing.status, 
+          req.params.id
+        ]
       );
       res.json({ success: true });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to update listing' });
+      console.error("PUT error:", err);
+      res.status(500).json({ error: 'Failed to update' });
     }
   });
 
@@ -261,73 +246,47 @@ async function startServer() {
     try {
       const listingResult = await pool.query('SELECT * FROM listings WHERE id = $1', [req.params.id]);
       const listing = listingResult.rows[0];
-      
       if (!listing) return res.status(404).json({ error: 'Not found' });
-      // Keep the inline check here because BOTH the seller AND the admin should be able to delete listings
       if (listing.seller_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
-
       await pool.query('DELETE FROM listings WHERE id = $1', [req.params.id]);
       res.json({ success: true });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to delete listing' });
+      res.status(500).json({ error: 'Failed' });
     }
   });
 
-  // --- CART & CHECKOUT ROUTES ---
+  // --- CART, MESSAGES, ADMIN ROUTES ---
   app.get('/api/cart', authenticate, async (req: any, res) => {
     try {
-      const result = await pool.query(`
-        SELECT c.id as cart_item_id, l.* FROM cart_items c 
-        JOIN listings l ON c.listing_id = l.id 
-        WHERE c.user_id = $1`, [req.user.id]);
+      const result = await pool.query('SELECT c.id as cart_item_id, l.* FROM cart_items c JOIN listings l ON c.listing_id = l.id WHERE c.user_id = $1', [req.user.id]);
       res.json(result.rows || []);
-    } catch (err) {
-      res.status(500).json([]);
-    }
+    } catch (err) { res.status(500).json([]); }
   });
 
   app.post('/api/cart', authenticate, async (req: any, res) => {
     try {
-      const { listing_id } = req.body;
-      await pool.query(
-        'INSERT INTO cart_items (user_id, listing_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-        [req.user.id, listing_id]
-      );
+      await pool.query('INSERT INTO cart_items (user_id, listing_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, req.body.listing_id]);
       res.json({ success: true });
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to add to cart' });
-    }
+    } catch (err) { res.status(500).json({ error: 'Failed' }); }
   });
 
   app.delete('/api/cart/:id', authenticate, async (req: any, res) => {
     try {
       await pool.query('DELETE FROM cart_items WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
       res.json({ success: true });
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to remove' });
-    }
+    } catch (err) { res.status(500).json({ error: 'Failed' }); }
   });
 
   app.post('/api/checkout', authenticate, async (req: any, res) => {
     const client = await pool.connect();
     try {
-      const cartItemsResult = await client.query(`
-        SELECT cart_items.*, listings.price, listings.status
-        FROM cart_items JOIN listings ON cart_items.listing_id = listings.id
-        WHERE cart_items.user_id = $1
-      `, [req.user.id]);
-
+      const cartItemsResult = await client.query('SELECT cart_items.*, listings.price, listings.status FROM cart_items JOIN listings ON cart_items.listing_id = listings.id WHERE cart_items.user_id = $1', [req.user.id]);
       const cartItems = cartItemsResult.rows;
-      if (cartItems.length === 0) return res.status(400).json({ error: 'Cart is empty' });
-
+      if (cartItems.length === 0) return res.status(400).json({ error: 'Empty' });
       await client.query('BEGIN');
       for (const item of cartItems) {
-        // We still check if the seller manually marked it as sold before allowing the purchase
-        if (item.status !== 'available') throw new Error(`Item ${item.listing_id} is no longer available`);
-        
+        if (item.status !== 'available') throw new Error(`Item ${item.listing_id} unavailable`);
         await client.query('INSERT INTO transactions (buyer_id, listing_id, amount) VALUES ($1, $2, $3)', [req.user.id, item.listing_id, item.price]);
-        
-        // FIXED: We now ONLY increment the sold_count. We do NOT change the status to 'sold'.
         await client.query("UPDATE listings SET sold_count = sold_count + 1 WHERE id = $1", [item.listing_id]);
       }
       await client.query('DELETE FROM cart_items WHERE user_id = $1', [req.user.id]);
@@ -336,25 +295,16 @@ async function startServer() {
     } catch (err: any) {
       await client.query('ROLLBACK');
       res.status(400).json({ error: err.message });
-    } finally {
-      client.release();
-    }
+    } finally { client.release(); }
   });
 
   app.get('/api/transactions', authenticate, async (req: any, res) => {
     try {
-      const result = await pool.query(`
-        SELECT transactions.*, listings.title, listings.image_url
-        FROM transactions JOIN listings ON transactions.listing_id = listings.id
-        WHERE transactions.buyer_id = $1 ORDER BY transactions.created_at DESC
-      `, [req.user.id]);
+      const result = await pool.query('SELECT t.*, l.title, l.image_url FROM transactions t JOIN listings l ON t.listing_id = l.id WHERE t.buyer_id = $1 ORDER BY t.created_at DESC', [req.user.id]);
       res.json(result.rows);
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to fetch transactions' });
-    }
+    } catch (err) { res.status(500).json({ error: 'Failed' }); }
   });
 
-  // --- MESSAGES ROUTES ---
   app.get('/api/messages', authenticate, async (req: any, res) => {
     try {
       const result = await pool.query(`
@@ -370,9 +320,7 @@ async function startServer() {
         ORDER BY other_user_id, listing_id, m.created_at DESC
       `, [req.user.id]);
       res.json(result.rows || []);
-    } catch (err) {
-      res.status(500).json([]);
-    }
+    } catch (err) { res.status(500).json([]); }
   });
 
   app.get('/api/messages/:otherUserId', authenticate, async (req: any, res) => {
@@ -387,136 +335,98 @@ async function startServer() {
         [req.user.id, req.params.otherUserId, req.query.listing_id]
       );
       res.json(result.rows || []);
-    } catch (err) {
-      res.status(500).json([]);
-    }
+    } catch (err) { res.status(500).json([]); }
   });
 
   app.post('/api/messages', authenticate, async (req: any, res) => {
     try {
       const result = await pool.query(
-        // Added reply_to_id to the INSERT statement
         'INSERT INTO messages (sender_id, receiver_id, listing_id, content, reply_to_id) VALUES ($1, $2, $3, $4, $5) RETURNING *',
         [req.user.id, req.body.receiver_id, req.body.listing_id, req.body.content, req.body.reply_to_id || null]
       );
       res.json(result.rows[0]);
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to send' });
-    }
+    } catch (err) { res.status(500).json({ error: 'Failed' }); }
   });
 
   app.post('/api/reports', authenticate, async (req: any, res) => {
     try {
       await pool.query('INSERT INTO reports (reporter_id, reported_id, reason) VALUES ($1, $2, $3)', [req.user.id, req.body.reported_id, req.body.reason]);
       res.json({ success: true });
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to submit report' });
-    }
+    } catch (err) { res.status(500).json({ error: 'Failed' }); }
   });
 
-  // --- ADMIN & REPORT ROUTES (SECURED WITH requireAdmin) ---
-  
+  // --- ADMIN SECTION ---
   app.get('/api/admin/stats', authenticate, requireAdmin, async (req: any, res) => {
     try {
-      const [usersRes, listingsRes, messagesRes, transRes, reportsRes] = await Promise.all([
+      const [u, l, m, t, r] = await Promise.all([
         pool.query('SELECT COUNT(*) as count FROM users'),
         pool.query('SELECT COUNT(*) as count FROM listings'),
         pool.query('SELECT COUNT(*) as count FROM messages'),
         pool.query('SELECT COUNT(*) as count FROM transactions'),
         pool.query("SELECT COUNT(*) as count FROM reports WHERE status = 'pending'")
       ]);
-
       res.json({
-        totalUsers: parseInt(usersRes.rows[0].count),
-        totalListings: parseInt(listingsRes.rows[0].count),
-        totalMessages: parseInt(messagesRes.rows[0].count),
-        totalTransactions: parseInt(transRes.rows[0].count),
-        totalReports: parseInt(reportsRes.rows[0].count),
+        totalUsers: parseInt(u.rows[0].count),
+        totalListings: parseInt(l.rows[0].count),
+        totalMessages: parseInt(m.rows[0].count),
+        totalTransactions: parseInt(t.rows[0].count),
+        totalReports: parseInt(r.rows[0].count),
         onlineUsers: userSockets.size,
         recentErrors: systemErrors.slice(0, 10)
       });
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to fetch stats' });
-    }
+    } catch (err) { res.status(500).json({ error: 'Failed' }); }
   });
 
   app.get('/api/admin/users', authenticate, requireAdmin, async (req: any, res) => {
     try {
       const result = await pool.query('SELECT id, name, email, role, created_at FROM users');
       res.json(result.rows);
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to fetch users' });
-    }
+    } catch (err) { res.status(500).json({ error: 'Failed' }); }
   });
 
   app.delete('/api/admin/users/:id', authenticate, requireAdmin, async (req: any, res) => {
     try {
       await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
       res.json({ success: true });
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to delete user' });
-    }
+    } catch (err) { res.status(500).json({ error: 'Failed' }); }
   });
 
   app.get('/api/admin/reports', authenticate, requireAdmin, async (req: any, res) => {
     try {
-      const result = await pool.query(`
-        SELECT reports.*, u1.name as reporter_name, u2.name as reported_name 
-        FROM reports JOIN users u1 ON reports.reporter_id = u1.id JOIN users u2 ON reports.reported_id = u2.id 
-        ORDER BY created_at DESC
-      `);
+      const result = await pool.query('SELECT reports.*, u1.name as reporter_name, u2.name as reported_name FROM reports JOIN users u1 ON reports.reporter_id = u1.id JOIN users u2 ON reports.reported_id = u2.id ORDER BY created_at DESC');
       res.json(result.rows);
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to fetch reports' });
-    }
+    } catch (err) { res.status(500).json({ error: 'Failed' }); }
   });
 
   app.post('/api/admin/reports/:id/resolve', authenticate, requireAdmin, async (req: any, res) => {
     try {
       await pool.query("UPDATE reports SET status = 'resolved' WHERE id = $1", [req.params.id]);
       res.json({ success: true });
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to resolve report' });
-    }
+    } catch (err) { res.status(500).json({ error: 'Failed' }); }
   });
 
   app.post('/api/admin/warnings', authenticate, requireAdmin, async (req: any, res) => {
     try {
       await pool.query('INSERT INTO warnings (user_id, admin_id, message) VALUES ($1, $2, $3)', [req.body.user_id, req.user.id, req.body.message]);
       res.json({ success: true });
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to issue warning' });
-    }
+    } catch (err) { res.status(500).json({ error: 'Failed' }); }
   });
 
   app.get('/api/warnings', authenticate, async (req: any, res) => {
     try {
-      const result = await pool.query(`
-        SELECT w.*, u.name as admin_name 
-        FROM warnings w 
-        JOIN users u ON w.admin_id = u.id 
-        WHERE w.user_id = $1 
-        AND w.created_at > NOW() - INTERVAL '7 days'
-        ORDER BY w.created_at DESC
-      `, [req.user.id]);
+      const result = await pool.query('SELECT w.*, u.name as admin_name FROM warnings w JOIN users u ON w.admin_id = u.id WHERE w.user_id = $1 AND w.created_at > NOW() - INTERVAL \'7 days\' ORDER BY w.created_at DESC', [req.user.id]);
       res.json(result.rows || []);
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to fetch warnings' });
-    }
+    } catch (err) { res.status(500).json({ error: 'Failed' }); }
   });
 
   app.get('/api/users/:id', async (req, res) => {
     try {
       const result = await pool.query('SELECT id, name, email, role, created_at FROM users WHERE id = $1', [req.params.id]);
-      const user = result.rows[0];
-      if (!user) return res.status(404).json({ error: 'User not found' });
-      res.json(user);
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to fetch user' });
-    }
+      if (!result.rows[0]) return res.status(404).json({ error: 'Not found' });
+      res.json(result.rows[0]);
+    } catch (err) { res.status(500).json({ error: 'Failed' }); }
   });
 
-  // --- PRODUCTION SERVING ---
   const PORT = process.env.PORT || 3000;
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.resolve(process.cwd(), 'dist'); 
