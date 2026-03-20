@@ -111,67 +111,70 @@ const Home: React.FC = () => {
     setSearch('');
   };
 
+  // Helper to format price with commas (e.g., 2,300)
+  const formatPrice = (price: number) => {
+    return Number(price).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  };
+
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-8 py-4 md:py-8 flex flex-col md:flex-row gap-6 md:gap-8">
+    <div className="max-w-[1400px] mx-auto px-4 py-4 md:py-8 flex flex-col md:flex-row gap-6 md:gap-10">
       
-      {/* MOBILE: Horizontal Categories (Top) */}
-      <div className="md:hidden -mx-4 px-4 overflow-x-auto no-scrollbar pb-2">
-        <div className="flex gap-2">
+      {/* MOBILE: Amazon-Style Horizontal Categories */}
+      <div className="md:hidden -mx-4 px-4 overflow-x-auto no-scrollbar pb-1">
+        <div className="flex gap-2.5">
           <button
             onClick={() => handleCategorySelect('All')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold whitespace-nowrap transition-all text-sm ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-sm border ${
               category === 'All'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none'
-                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-100 dark:border-slate-800'
+                ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white'
+                : 'bg-white text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800'
             }`}
           >
-            <ShoppingBag className="h-4 w-4" />
             All
           </button>
           {categoryItems.map((cat) => (
             <button
               key={cat.name}
               onClick={() => handleCategorySelect(cat.name)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold whitespace-nowrap transition-all text-sm ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-all text-sm border ${
                 category === cat.name
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-100 dark:border-slate-800'
+                  ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white'
+                  : 'bg-white text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800'
               }`}
             >
-              {cat.icon}
               {cat.name}
             </button>
           ))}
         </div>
       </div>
 
-      {/* DESKTOP: Vertical Sidebar (Left) */}
-      <aside className="hidden md:block w-64 shrink-0">
+      {/* DESKTOP: Clean Vertical Sidebar */}
+      <aside className="hidden md:block w-60 shrink-0">
         <div className="sticky top-24">
-          <h2 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 px-4">Browse Categories</h2>
+          <h2 className="text-xl font-black text-slate-900 dark:text-slate-50 mb-6 tracking-tight">Categories</h2>
           <nav className="space-y-1">
             <button
               onClick={() => handleCategorySelect('All')}
-              className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl font-bold transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${
                 category === 'All'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600'
+                  ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <ShoppingBag className="h-5 w-5" />
+              <ShoppingBag className="h-5 w-5 opacity-70" />
               All Items
             </button>
             {categoryItems.map((cat) => (
               <button
                 key={cat.name}
                 onClick={() => handleCategorySelect(cat.name)}
-                className={`w-full flex items-center gap-4 px-4 py-3 rounded-2xl font-bold transition-all ${
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${
                   category === cat.name
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-indigo-600'
+                    ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                {cat.icon}
+                <span className="opacity-70">{cat.icon}</span>
                 {cat.name}
               </button>
             ))}
@@ -187,36 +190,33 @@ const Home: React.FC = () => {
           <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
           <input
             type="text"
-            placeholder="Search for textbooks, tech, furniture..."
+            placeholder="Search campus marketplace..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl py-4 pl-14 pr-6 text-sm md:text-base font-medium focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 outline-none transition-all shadow-sm placeholder:text-slate-400"
+            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl py-4 pl-14 pr-6 text-sm md:text-base font-medium focus:ring-2 focus:ring-slate-900 dark:focus:ring-white outline-none transition-all placeholder:text-slate-400"
           />
         </div>
 
         {/* Product Grid */}
         {loading && offset === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-            <Loader2 className="h-10 w-10 animate-spin text-indigo-600 mb-4" />
-            <p className="font-bold">Loading marketplace...</p>
+            <Loader2 className="h-10 w-10 animate-spin text-slate-400 mb-4" />
           </div>
         ) : listings.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-12 text-center border border-slate-100 dark:border-slate-800 shadow-sm">
-            <div className="bg-slate-50 dark:bg-slate-800 w-24 h-24 rounded-[2rem] flex items-center justify-center mx-auto mb-6">
-              <Search className="h-10 w-10 text-slate-400" />
-            </div>
-            <h3 className="text-2xl font-black text-slate-900 dark:text-slate-50 mb-2 tracking-tight">No items found</h3>
-            <p className="text-slate-500 font-medium">Try adjusting your search or category filters.</p>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-200 dark:border-slate-800">
+            <Search className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+            <h3 className="text-xl font-black text-slate-900 dark:text-slate-50 mb-2 tracking-tight">No results found</h3>
+            <p className="text-slate-500 font-medium">Try checking your spelling or adjusting filters.</p>
             <button 
               onClick={() => { setSearch(''); handleCategorySelect('All'); }}
-              className="mt-6 btn-primary"
+              className="mt-6 font-bold text-slate-900 dark:text-white underline hover:no-underline"
             >
-              Clear all filters
+              Clear filters
             </button>
           </div>
         ) : (
           <>
-            {/* FIXED: Switched mobile to 2 columns (grid-cols-2) for that premium native app look */}
+            {/* MATCHING SCREENSHOT: 2 columns on mobile, crisp white cards */}
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
               {listings.map((listing, index) => {
                 const isLastElement = index === listings.length - 1;
@@ -225,8 +225,9 @@ const Home: React.FC = () => {
                     to={`/listing/${listing.id}`}
                     key={listing.id} 
                     ref={isLastElement ? lastElementRef : null}
-                    className="group flex flex-col bg-white dark:bg-slate-900 rounded-[1.5rem] md:rounded-[2rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-xl hover:border-indigo-100 dark:hover:border-indigo-900 transition-all duration-300"
+                    className="group flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-md transition-shadow duration-300"
                   >
+                    {/* Image Area with Overlay Badge */}
                     <div className="relative aspect-square bg-slate-50 dark:bg-slate-800 overflow-hidden">
                       {listing.image_url ? (
                         <img 
@@ -235,30 +236,31 @@ const Home: React.FC = () => {
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-slate-400">
-                          <ShoppingBag className="h-10 w-10 md:h-12 md:w-12 opacity-20" />
+                        <div className="w-full h-full flex items-center justify-center text-slate-300">
+                          <ShoppingBag className="h-12 w-12 opacity-20" />
                         </div>
                       )}
                       
-                      {/* Floating Price Tag */}
-                      <div className="absolute bottom-2 left-2 md:bottom-3 md:left-3 bg-white/95 backdrop-blur-md dark:bg-slate-900/95 px-2.5 py-1 md:px-3 md:py-1.5 rounded-lg md:rounded-xl font-black text-indigo-600 dark:text-indigo-400 shadow-sm text-xs md:text-sm">
-                        GH₵{Number(listing.price).toFixed(2)}
+                      {/* Exact match to screenshot: Badge overlaid on top left of image */}
+                      <div className="absolute top-2 left-2 md:top-3 md:left-3 bg-white/95 backdrop-blur-md dark:bg-slate-900/95 px-2.5 py-1 rounded-md font-black text-slate-900 dark:text-white shadow-sm text-[10px] uppercase tracking-widest">
+                        {listing.category}
                       </div>
                     </div>
                     
-                    <div className="p-3 md:p-5 flex flex-col flex-1">
-                      <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1 md:mb-2 truncate">
-                        {listing.category}
-                      </span>
-                      <h3 className="font-bold text-sm md:text-base text-slate-900 dark:text-slate-50 line-clamp-2 leading-tight mb-2 md:mb-3 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                    {/* Content Area */}
+                    <div className="p-4 flex flex-col flex-1">
+                      <h3 className="font-bold text-sm md:text-base text-slate-900 dark:text-slate-50 line-clamp-2 leading-snug">
                         {listing.title}
                       </h3>
                       
-                      <div className="mt-auto flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                        <div className="w-5 h-5 md:w-6 md:h-6 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-[9px] md:text-[10px] font-black text-slate-600 dark:text-slate-400 shrink-0">
-                          {listing.seller_name.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="truncate">{listing.seller_name}</span>
+                      <p className="text-xs font-medium text-slate-400 dark:text-slate-500 mt-1 truncate">
+                        {listing.seller_name}
+                      </p>
+                      
+                      <div className="mt-auto pt-3">
+                        <span className="text-lg md:text-xl font-black text-slate-900 dark:text-white">
+                          GH₵{formatPrice(listing.price)}
+                        </span>
                       </div>
                     </div>
                   </Link>
@@ -268,13 +270,13 @@ const Home: React.FC = () => {
             
             {loadingMore && (
               <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
               </div>
             )}
             
             {!hasMore && listings.length > 0 && (
-              <div className="text-center py-8 text-xs md:text-sm text-slate-400 font-bold">
-                You've reached the end of the marketplace!
+              <div className="text-right py-8 px-4 text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-600">
+                End of Results
               </div>
             )}
           </>

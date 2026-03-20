@@ -71,23 +71,23 @@ const MessageBubble = ({
   const quotedMsg = msg.reply_to_id ? allMessages.find(m => m.id === msg.reply_to_id) : null;
 
   return (
-    <div className={`relative flex w-full items-center group ${isOwn ? 'justify-end' : 'justify-start'}`}>
+    <div className={`relative flex w-full items-center group mb-4 ${isOwn ? 'justify-end' : 'justify-start'}`}>
       
       {/* MOBILE: Hidden Reply Icon */}
       <div 
-        className={`absolute left-0 flex md:hidden items-center justify-center transition-opacity duration-100 ${isOwn ? '-ml-12' : ''}`}
+        className={`absolute left-0 flex md:hidden items-center justify-center transition-opacity duration-100 ${isOwn ? '-ml-10' : ''}`}
         style={{ opacity: Math.min(offsetX / 50, 1) }}
       >
-        <div className="bg-slate-200 dark:bg-slate-700 p-2 rounded-full">
-          <Reply className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+        <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-full shadow-sm border border-slate-200 dark:border-slate-700">
+          <Reply className="w-4 h-4 text-slate-900 dark:text-white" />
         </div>
       </div>
 
-      {/* DESKTOP: Hover Reply Button (Left side if it's your message) */}
+      {/* DESKTOP: Hover Reply Button */}
       {isOwn && (
         <button
           onClick={() => onReply(msg)}
-          className="hidden md:flex opacity-0 group-hover:opacity-100 mr-2 p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-full transition-all"
+          className="hidden md:flex opacity-0 group-hover:opacity-100 mr-2 p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-600"
           title="Reply"
         >
           <Reply className="w-4 h-4" />
@@ -102,36 +102,36 @@ const MessageBubble = ({
           transform: `translateX(${offsetX}px)`, 
           transition: isDragging ? 'none' : 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)' 
         }}
-        className={`max-w-[85%] md:max-w-[75%] p-3.5 md:p-4 rounded-[1.5rem] text-sm font-medium shadow-sm z-10 ${
+        className={`max-w-[85%] md:max-w-[70%] p-3.5 rounded-2xl text-sm md:text-base shadow-sm z-10 ${
           isOwn
-            ? 'bg-indigo-600 text-white rounded-tr-none'
-            : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 border border-slate-100 dark:border-slate-700 rounded-tl-none'
+            ? 'bg-slate-900 text-white rounded-tr-sm dark:bg-white dark:text-slate-900'
+            : 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 border border-slate-200 dark:border-slate-800 rounded-tl-sm'
         }`}
       >
         {quotedMsg && (
           <div className={`mb-2 p-2.5 rounded-xl text-xs border-l-4 ${
             isOwn 
-              ? 'bg-indigo-700/50 border-indigo-300 text-indigo-100' 
-              : 'bg-slate-100 dark:bg-slate-700/50 border-indigo-600 text-slate-500 dark:text-slate-400'
+              ? 'bg-slate-800 border-slate-500 text-slate-200 dark:bg-slate-100 dark:border-slate-300 dark:text-slate-600' 
+              : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400'
           }`}>
-            <p className={`font-black mb-0.5 ${isOwn ? 'text-indigo-200' : 'text-indigo-600'}`}>
+            <p className={`font-black mb-0.5 ${isOwn ? 'text-white dark:text-slate-900' : 'text-slate-900 dark:text-white'}`}>
               {quotedMsg.sender_id === msg.sender_id ? 'You' : otherUserName}
             </p>
             <p className="truncate opacity-90">{quotedMsg.content}</p>
           </div>
         )}
 
-        <p>{msg.content}</p>
-        <p className={`text-[10px] mt-1.5 font-black uppercase tracking-tighter ${isOwn ? 'text-indigo-200' : 'text-slate-400'}`}>
+        <p className="leading-snug">{msg.content}</p>
+        <p className={`text-[10px] mt-1.5 font-bold tracking-widest uppercase ${isOwn ? 'text-slate-400 dark:text-slate-500' : 'text-slate-400'}`}>
           {msg.created_at ? format(new Date(msg.created_at), 'HH:mm') : ''}
         </p>
       </div>
 
-      {/* DESKTOP: Hover Reply Button (Right side if it's their message) */}
+      {/* DESKTOP: Hover Reply Button (Right side) */}
       {!isOwn && (
         <button
           onClick={() => onReply(msg)}
-          className="hidden md:flex opacity-0 group-hover:opacity-100 ml-2 p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-full transition-all"
+          className="hidden md:flex opacity-0 group-hover:opacity-100 ml-2 p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-600"
           title="Reply"
         >
           <Reply className="w-4 h-4" />
@@ -163,9 +163,7 @@ const Messages: React.FC = () => {
   }, [messages, isTyping]);
 
   useEffect(() => {
-    if (clearNotifications) {
-      clearNotifications();
-    }
+    if (clearNotifications) clearNotifications();
   }, [clearNotifications]);
 
   const fetchConversations = async () => {
@@ -198,10 +196,7 @@ const Messages: React.FC = () => {
           setIsTyping(false); 
         }
         fetchConversations();
-        
-        if (clearNotifications) {
-          clearNotifications();
-        }
+        if (clearNotifications) clearNotifications();
       };
 
       const handleTyping = (data: any) => {
@@ -258,9 +253,7 @@ const Messages: React.FC = () => {
       const response = await api.post('/messages', messageData);
       const savedMsg = response.data;
       
-      if (socket) {
-        socket.emit('send_message', savedMsg);
-      }
+      if (socket) socket.emit('send_message', savedMsg);
 
       setNewMessage('');
       setReplyingTo(null);
@@ -271,7 +264,6 @@ const Messages: React.FC = () => {
 
   const handleReport = async () => {
     if (!selectedConv) return;
-    
     const reason = window.prompt(`Why are you reporting ${selectedConv.other_user_name || 'this user'}?`);
     if (!reason || !reason.trim()) return;
 
@@ -288,169 +280,174 @@ const Messages: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto h-[calc(100dvh-7rem)] md:h-[calc(100vh-12rem)] flex bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors">
-      
-      {/* SIDEBAR */}
-      <div className={`${selectedConv ? 'hidden md:flex' : 'flex'} w-full md:w-1/3 border-r-0 md:border-r border-slate-100 dark:border-slate-800 flex-col bg-white dark:bg-slate-900`}>
-        <div className="p-6 border-b border-slate-100 dark:border-slate-800">
-          <h2 className="text-2xl font-black text-slate-900 dark:text-slate-50 tracking-tight">Messages</h2>
-        </div>
-        <div className="flex-1 overflow-y-auto pb-6 md:pb-0">
-          {Array.isArray(conversations) && conversations.length > 0 ? (
-            conversations.map(conv => (
-              <button
-                key={`${conv.other_user_id}_${conv.listing_id}`}
-                onClick={() => {
-                  setSelectedConv(conv);
-                  fetchMessages(conv);
-                  setIsTyping(false);
-                }}
-                className={`w-full p-5 flex items-start gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all ${
-                  selectedConv?.other_user_id === conv.other_user_id && selectedConv?.listing_id === conv.listing_id
-                    ? 'bg-indigo-50 dark:bg-indigo-900/20 border-r-4 border-indigo-600'
-                    : ''
-                }`}
-              >
-                <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black shrink-0 shadow-lg shadow-indigo-100 dark:shadow-none">
-                  {(conv.other_user_name ? conv.other_user_name.charAt(0) : 'U').toUpperCase()}
-                </div>
-                <div className="flex-1 text-left min-w-0">
-                  <div className="flex justify-between items-baseline mb-1">
-                    <h3 className="font-bold text-slate-900 dark:text-slate-50 truncate">
-                      {conv.other_user_name || 'Unknown User'}
-                    </h3>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      {conv.last_message_time ? format(new Date(conv.last_message_time), 'MMM d') : ''}
-                    </span>
+    // FIXED: Using 100dvh for accurate mobile height, preventing the send button from hiding
+    <div className="h-[calc(100dvh-5rem)] md:h-[calc(100vh-6rem)] w-full max-w-[1400px] mx-auto md:py-6 md:px-4">
+      <div className="flex w-full h-full bg-white dark:bg-slate-950 md:rounded-[2rem] md:border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+        
+        {/* SIDEBAR */}
+        <div className={`w-full md:w-[350px] shrink-0 border-r border-slate-200 dark:border-slate-800 flex-col bg-slate-50 dark:bg-slate-950 ${selectedConv ? 'hidden md:flex' : 'flex'}`}>
+          <div className="p-5 md:p-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Messages</h2>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {Array.isArray(conversations) && conversations.length > 0 ? (
+              conversations.map(conv => (
+                <button
+                  key={`${conv.other_user_id}_${conv.listing_id}`}
+                  onClick={() => {
+                    setSelectedConv(conv);
+                    fetchMessages(conv);
+                    setIsTyping(false);
+                  }}
+                  className={`w-full p-4 flex items-start gap-4 border-b border-slate-100 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-900 transition-colors ${
+                    selectedConv?.other_user_id === conv.other_user_id && selectedConv?.listing_id === conv.listing_id
+                      ? 'bg-white dark:bg-slate-900 border-l-4 border-l-slate-900 dark:border-l-white'
+                      : 'border-l-4 border-l-transparent'
+                  }`}
+                >
+                  <div className="w-12 h-12 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-900 dark:text-white font-black shrink-0">
+                    {(conv.other_user_name ? conv.other_user_name.charAt(0) : 'U').toUpperCase()}
                   </div>
-                  <p className="text-xs font-black text-indigo-600 truncate mb-1 uppercase tracking-tighter">
-                    {conv.listing_title}
-                  </p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 truncate font-medium">
-                    {conv.last_message}
-                  </p>
+                  <div className="flex-1 text-left min-w-0">
+                    <div className="flex justify-between items-baseline mb-0.5">
+                      <h3 className="font-bold text-slate-900 dark:text-white truncate">
+                        {conv.other_user_name || 'Unknown User'}
+                      </h3>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                        {conv.last_message_time ? format(new Date(conv.last_message_time), 'MMM d') : ''}
+                      </span>
+                    </div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 truncate mb-1">
+                      {conv.listing_title}
+                    </p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 truncate font-medium">
+                      {conv.last_message}
+                    </p>
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="p-8 text-center text-slate-400">
+                <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                <p className="font-bold">No conversations yet</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* CHAT AREA */}
+        <div className={`flex-1 flex-col bg-white dark:bg-slate-900 min-w-0 ${!selectedConv ? 'hidden md:flex' : 'flex'}`}>
+          {selectedConv ? (
+            <>
+              {/* Header */}
+              <div className="h-16 md:h-20 shrink-0 px-4 md:px-6 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between z-10">
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setSelectedConv(null)}
+                    className="md:hidden p-2 -ml-2 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+                  >
+                    <ArrowLeft className="w-6 h-6" />
+                  </button>
+
+                  <div className="w-10 h-10 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-900 dark:text-white font-black shrink-0">
+                    {(selectedConv.other_user_name ? selectedConv.other_user_name.charAt(0) : 'U').toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-slate-900 dark:text-white truncate">
+                      {selectedConv.other_user_name || 'Unknown User'}
+                    </h3>
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest truncate">
+                      {selectedConv.listing_title}
+                    </p>
+                  </div>
                 </div>
-              </button>
-            ))
+
+                <button 
+                  onClick={handleReport}
+                  className="p-2 text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                  title="Report User"
+                >
+                  <AlertTriangle className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Messages Scroll Area */}
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 dark:bg-slate-900">
+                {Array.isArray(messages) && messages.map((msg, idx) => (
+                  <MessageBubble 
+                    key={`msg-${msg.id || idx}`}
+                    msg={msg}
+                    isOwn={msg.sender_id === user?.id}
+                    onReply={(m) => setReplyingTo(m)}
+                    allMessages={messages}
+                    otherUserName={selectedConv.other_user_name}
+                  />
+                ))}
+                
+                {isTyping && (
+                  <div className="flex justify-start mb-4">
+                    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-2xl rounded-tl-sm shadow-sm flex items-center gap-1.5">
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Input Area (Sticky Bottom) */}
+              <div className="shrink-0 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 p-3 md:p-4 z-20">
+                
+                {/* FIXED: Reply Preview is now solidly above the input, structurally impossible to overlap */}
+                {replyingTo && (
+                  <div className="mb-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl flex justify-between items-center shadow-sm">
+                    <div className="border-l-4 border-slate-900 dark:border-white pl-3 flex-1 min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white mb-0.5">
+                        Replying to {replyingTo.sender_id === user?.id ? 'yourself' : selectedConv.other_user_name}
+                      </p>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">
+                        {replyingTo.content}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setReplyingTo(null)}
+                      className="p-2 shrink-0 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                <form onSubmit={handleSendMessage} className="flex gap-2 w-full">
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={handleInputChange}
+                    placeholder="Type a message..."
+                    className="flex-1 min-w-0 bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-3 md:py-4 text-sm md:text-base font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-slate-900 dark:focus:ring-white outline-none transition-all placeholder:text-slate-500"
+                  />
+                  {/* FIXED: shrink-0 prevents the send button from squishing on small screens */}
+                  <button
+                    type="submit"
+                    disabled={!newMessage.trim()}
+                    className="shrink-0 bg-slate-900 text-white dark:bg-white dark:text-slate-900 p-3 md:px-5 md:py-4 rounded-xl font-bold hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors disabled:opacity-50 active:scale-95 flex items-center justify-center"
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </form>
+              </div>
+            </>
           ) : (
-            <div className="p-8 text-center text-slate-400">
-              <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-20" />
-              <p className="font-bold">No conversations yet</p>
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-950">
+              <div className="w-20 h-20 bg-white dark:bg-slate-900 rounded-full shadow-sm border border-slate-200 dark:border-slate-800 flex items-center justify-center mb-6">
+                <MessageSquare className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+              </div>
+              <p className="text-xl font-black text-slate-900 dark:text-white mb-2">Your Messages</p>
+              <p className="text-sm font-medium">Select a conversation to start chatting.</p>
             </div>
           )}
         </div>
-      </div>
-
-      {/* CHAT AREA */}
-      <div className={`${!selectedConv ? 'hidden md:flex' : 'flex fixed inset-0 z-[100] md:relative md:z-auto md:inset-auto'} flex-1 flex-col bg-slate-50 dark:bg-slate-900 w-full`}>
-        {selectedConv ? (
-          <>
-            <div className="p-4 pt-6 md:p-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shadow-sm md:shadow-none z-10">
-              <div className="flex items-center gap-3 md:gap-4">
-                <button 
-                  onClick={() => setSelectedConv(null)}
-                  className="md:hidden p-2 -ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                  aria-label="Back to messages"
-                >
-                  <ArrowLeft className="w-6 h-6" />
-                </button>
-
-                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black">
-                  {(selectedConv.other_user_name ? selectedConv.other_user_name.charAt(0) : 'U').toUpperCase()}
-                </div>
-                <div>
-                  <h3 className="font-black text-slate-900 dark:text-slate-50 max-w-[150px] md:max-w-xs truncate">
-                    {selectedConv.other_user_name || 'Unknown User'}
-                  </h3>
-                  <p className="text-[10px] md:text-xs text-indigo-600 font-black uppercase tracking-widest max-w-[150px] md:max-w-xs truncate">
-                    {selectedConv.listing_title}
-                  </p>
-                </div>
-              </div>
-
-              <button 
-                onClick={handleReport}
-                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
-                title="Report User"
-              >
-                <AlertTriangle className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-              {Array.isArray(messages) && messages.map((msg, idx) => (
-                <MessageBubble 
-                  key={`msg-${msg.id || idx}`}
-                  msg={msg}
-                  isOwn={msg.sender_id === user?.id}
-                  onReply={(m) => setReplyingTo(m)}
-                  allMessages={messages}
-                  otherUserName={selectedConv.other_user_name}
-                />
-              ))}
-              
-              {isTyping && (
-                <div className="flex justify-start animate-in fade-in duration-300">
-                  <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 rounded-[1.5rem] rounded-tl-none shadow-sm flex items-center gap-1.5">
-                    <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </div>
-                </div>
-              )}
-              
-              <div ref={messagesEndRef} />
-            </div>
-
-            <div className="p-4 pb-6 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 relative">
-              
-              {/* REPLY STAGING PREVIEW */}
-              {replyingTo && (
-                <div className="absolute bottom-[calc(100%+8px)] left-4 right-4 md:left-6 md:right-6 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-2xl flex justify-between items-center shadow-lg animate-in slide-in-from-bottom-2">
-                  <div className="border-l-4 border-indigo-600 pl-3 flex-1 min-w-0">
-                    <p className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400">
-                      Replying to {replyingTo.sender_id === user?.id ? 'yourself' : selectedConv.other_user_name}
-                    </p>
-                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300 truncate">
-                      {replyingTo.content}
-                    </p>
-                  </div>
-                  <button 
-                    onClick={() => setReplyingTo(null)}
-                    className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 ml-2"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              )}
-
-              <form onSubmit={handleSendMessage} className="flex gap-2 md:gap-3">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={handleInputChange}
-                  placeholder="Type a message..."
-                  className="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-2xl px-5 py-3 md:px-6 md:py-4 text-sm font-bold text-slate-900 dark:text-slate-50 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 transition-all placeholder:text-slate-400"
-                />
-                <button
-                  type="submit"
-                  disabled={!newMessage.trim()}
-                  className="bg-indigo-600 text-white p-3 md:p-4 rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none disabled:opacity-50 active:scale-95 flex-shrink-0"
-                >
-                  <Send className="w-5 h-5 md:w-6 md:h-6" />
-                </button>
-              </form>
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8 hidden md:flex">
-            <div className="w-20 h-20 bg-white dark:bg-slate-900 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 flex items-center justify-center mb-6">
-              <MessageSquare className="w-10 h-10 text-indigo-600" />
-            </div>
-            <p className="text-xl font-black text-slate-900 dark:text-slate-50 mb-2">Select a conversation</p>
-            <p className="text-sm font-bold">Pick a message from the sidebar to start chatting</p>
-          </div>
-        )}
       </div>
     </div>
   );
