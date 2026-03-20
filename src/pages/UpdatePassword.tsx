@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, ArrowRight, Loader2 } from 'lucide-react';
-import { supabase } from '../services/supabase'; // Adjust this path if your supabase file is elsewhere
+import { supabase } from '../lib/supabase'; // Adjust this path if your supabase file is elsewhere
 
 const UpdatePassword: React.FC = () => {
   const [password, setPassword] = useState('');
