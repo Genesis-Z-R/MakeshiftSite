@@ -85,3 +85,11 @@
     scrollbar-width: none;
   }
 }
+
+/* Add this to the bottom of src/index.css */
+@media (max-width: 768px) {
+  body {
+    /* Prevents the bottom tab bar from covering up content on mobile */
+    padding-bottom: 80px; 
+  }
+}
