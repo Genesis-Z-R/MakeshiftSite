@@ -98,46 +98,49 @@ const Home: React.FC = () => {
   return (
     <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
       
-      {/* Search Header - Sticky on Mobile */}
-      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
-        <div className="relative max-w-7xl mx-auto">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search campus marketplace..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white"
-          />
+      {/* STICKY HEADER CONTAINER */}
+      <div className="sticky top-0 z-40 bg-white dark:bg-slate-900 shadow-sm">
+        {/* Search Bar */}
+        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="relative max-w-7xl mx-auto">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search campus marketplace..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-lg py-2 pl-10 pr-4 text-sm outline-none dark:text-white placeholder:text-slate-500"
+            />
+          </div>
         </div>
-      </div>
 
-      {/* Horizontal Categories - Amazon Style */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 overflow-x-auto no-scrollbar py-2 px-4">
-        <div className="flex gap-2 max-w-7xl mx-auto">
-          <button
-            onClick={() => handleCategorySelect('All')}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${
-              category === 'All'
-                ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900'
-                : 'bg-white text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
-            }`}
-          >
-            All Items
-          </button>
-          {categoryItems.map((cat) => (
+        {/* Horizontal Categories - Now also sticky! */}
+        <div className="overflow-x-auto no-scrollbar py-2 px-4 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex gap-2 max-w-7xl mx-auto">
             <button
-              key={cat.name}
-              onClick={() => handleCategorySelect(cat.name)}
+              onClick={() => handleCategorySelect('All')}
               className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${
-                category === cat.name
+                category === 'All'
                   ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900'
                   : 'bg-white text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
               }`}
             >
-              {cat.name}
+              All Items
             </button>
-          ))}
+            {categoryItems.map((cat) => (
+              <button
+                key={cat.name}
+                onClick={() => handleCategorySelect(cat.name)}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${
+                  category === cat.name
+                    ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900'
+                    : 'bg-white text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -147,45 +150,59 @@ const Home: React.FC = () => {
             <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
           </div>
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-6">
+          /* SLIMMER GRID: 2 columns on mobile, 4 on desktop */
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
             {listings.map((listing, index) => {
               const isLastElement = index === listings.length - 1;
               return (
-                <Link 
-                  to={`/listing/${listing.id}`}
+                <div 
                   key={listing.id} 
                   ref={isLastElement ? lastElementRef : null}
-                  className="flex flex-col bg-white dark:bg-slate-900 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800"
+                  className="flex flex-col bg-white dark:bg-slate-900 rounded-lg overflow-hidden border border-slate-100 dark:border-slate-800/50 shadow-sm"
                 >
-                  <div className="relative aspect-square bg-slate-100 dark:bg-slate-800">
+                  <Link to={`/listing/${listing.id}`} className="relative aspect-[4/5] bg-slate-100 dark:bg-slate-800">
                     <img 
                       src={listing.image_url || '/placeholder.png'} 
                       alt={listing.title}
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute top-1 left-1 bg-white/90 dark:bg-slate-900/90 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border border-slate-100 dark:border-slate-800">
+                    <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-black uppercase text-white tracking-widest">
                       {listing.category}
                     </div>
-                  </div>
-                  <div className="p-2 md:p-4 flex flex-col flex-1">
-                    <h3 className="font-medium text-[11px] md:text-sm text-slate-900 dark:text-slate-100 line-clamp-2 leading-tight">
-                      {listing.title}
-                    </h3>
-                    <p className="text-[9px] text-slate-400 mt-0.5">{listing.seller_name}</p>
+                  </Link>
+                  
+                  <div className="p-2 md:p-3 flex flex-col flex-1">
+                    <Link to={`/listing/${listing.id}`}>
+                      <h3 className="font-medium text-[11px] md:text-sm text-slate-900 dark:text-slate-100 line-clamp-2 leading-tight hover:text-indigo-500 transition-colors">
+                        {listing.title}
+                      </h3>
+                    </Link>
+                    
+                    {/* RESTORED: Clickable Seller Storefront Link */}
+                    <Link 
+                      to={`/seller/${listing.seller_id}`}
+                      className="text-[9px] text-slate-400 mt-1 hover:text-indigo-400 transition-colors flex items-center gap-1"
+                    >
+                      <div className="w-3 h-3 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-[7px] font-black">
+                         {listing.seller_name.charAt(0).toUpperCase()}
+                      </div>
+                      {listing.seller_name}
+                    </Link>
+
                     <div className="mt-auto pt-2">
-                      <span className="text-sm md:text-lg font-black text-slate-900 dark:text-white">
+                      <span className="text-sm md:text-base font-black text-slate-900 dark:text-white">
                         GH₵{Number(listing.price).toLocaleString()}
                       </span>
                     </div>
                   </div>
-                </Link>
+                </div>
               );
             })}
           </div>
         )}
         
         {!hasMore && listings.length > 0 && (
-          <div className="text-center py-10 pb-24 text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <div className="text-center py-12 pb-32 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
             End of Results
           </div>
         )}
