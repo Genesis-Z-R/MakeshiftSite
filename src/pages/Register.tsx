@@ -3,13 +3,12 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { supabase } from '../lib/supabase';
-import { UserPlus, Mail, Lock, User, AlertCircle, Shield } from 'lucide-react';
+import { UserPlus, Mail, Lock, User, AlertCircle } from 'lucide-react';
 
 const Register: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { announce } = useAccessibility();
@@ -44,7 +43,8 @@ const Register: React.FC = () => {
         options: {
           data: {
             full_name: name,
-            role: adminPassword === 'Genesis@6112' ? 'admin' : 'student'
+            // SECURED: Everyone is safely initialized as a student by default
+            role: 'student' 
           }
         }
       });
@@ -108,7 +108,7 @@ const Register: React.FC = () => {
                 id="name"
                 type="text"
                 required
-                className="input-field pl-10"
+                className="input-field pl-10 w-full"
                 placeholder="John Doe"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -125,7 +125,7 @@ const Register: React.FC = () => {
                 id="email"
                 type="email"
                 required
-                className="input-field pl-10"
+                className="input-field pl-10 w-full"
                 placeholder="student@university.edu"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -142,7 +142,7 @@ const Register: React.FC = () => {
                 id="password"
                 type="password"
                 required
-                className="input-field pl-10"
+                className="input-field pl-10 w-full"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -151,26 +151,10 @@ const Register: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-            <label htmlFor="adminPassword" className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Admin Password (Optional)</label>
-            <div className="relative">
-              <Shield className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" aria-hidden="true" />
-              <input
-                id="adminPassword"
-                type="password"
-                className="input-field pl-10 bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900"
-                placeholder="Enter code for admin access"
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-              />
-            </div>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 px-1">Only required for staff/admin accounts</p>
-          </div>
-
           <button
             type="submit"
             disabled={loading}
-            className="btn-primary w-full py-3 shadow-lg shadow-indigo-200 dark:shadow-none"
+            className="btn-primary w-full py-3 shadow-lg shadow-indigo-200 dark:shadow-none mt-4"
           >
             {loading ? 'Creating account...' : 'Sign Up'}
           </button>

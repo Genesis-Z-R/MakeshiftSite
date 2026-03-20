@@ -47,6 +47,7 @@ export default function App() {
                     <Route path="/" element={<Home />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/listing/:id" element={<ListingDetail />} />
                     <Route path="/seller/:id" element={<SellerProfile />} />
                     <Route path="/cart" element={

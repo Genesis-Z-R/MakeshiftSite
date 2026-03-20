@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { Shield, Users, Package, Trash2, Activity, MessageSquare, CreditCard, Clock, Flag, AlertTriangle } from 'lucide-react';
@@ -34,6 +36,10 @@ interface Report {
 }
 
 const Admin: React.FC = () => {
+  // --- NEW SECURITY IMPORTS ---
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
   const { announce } = useAccessibility();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
@@ -45,6 +51,14 @@ const Admin: React.FC = () => {
   const [warningMessage, setWarningMessage] = useState('');
   const [sendingWarning, setSendingWarning] = useState(false);
   const { onlineUsers = [] } = useSocket();
+
+  // --- NEW ROUTE PROTECTION ---
+  useEffect(() => {
+    // If they are not logged in, or their role is not admin, kick them to the home page
+    if (!user || user.role !== 'admin') {
+      navigate('/');
+    }
+  }, [user, navigate]);
 
   const fetchData = async () => {
     try {
@@ -68,8 +82,11 @@ const Admin: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    // Only fetch data if they are an admin
+    if (user && user.role === 'admin') {
+      fetchData();
+    }
+  }, [user]);
 
   const resolveReport = async (reportId: number) => {
     try {
@@ -106,6 +123,10 @@ const Admin: React.FC = () => {
       console.error('Error deleting user:', error);
     }
   };
+
+  // --- PREVENT UI FLASH ---
+  // If the redirect hasn't happened yet, return null so they don't see the dashboard
+  if (!user || user.role !== 'admin') return null;
 
   if (loading) return (
     <div className="max-w-7xl mx-auto px-4 py-20 text-center">
@@ -227,7 +248,6 @@ const Admin: React.FC = () => {
                     <td className="px-6 py-4 text-right">
                       {r.status === 'pending' && (
                         <div className="flex items-center justify-end gap-4">
-                          {/* FIXED: Issue Warning button restored here! */}
                           <button 
                             onClick={() => setWarningUserId(r.reported_id)} 
                             className="text-[10px] font-black uppercase tracking-widest text-amber-600 hover:text-amber-500 transition-colors"

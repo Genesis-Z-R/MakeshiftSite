@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import api from '../services/api';
 import { format } from 'date-fns';
-import { Send, MessageSquare, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Send, MessageSquare, AlertTriangle, ArrowLeft, X, Reply } from 'lucide-react';
 
 interface Message {
   id: number;
@@ -12,6 +12,7 @@ interface Message {
   listing_id: number;
   content: string;
   created_at: string;
+  reply_to_id?: number; // NEW: Tracks quoted messages
   sender_name?: string;
   receiver_name?: string;
   listing_title?: string;
@@ -27,6 +28,174 @@ interface Conversation {
   unread_count: number;
 }
 
+// --- NEW: ISOLATED BUBBLE COMPONENT FOR 60FPS SWIPE PERFORMANCE ---
+const MessageBubble = ({ 
+  msg, 
+  isOwn, 
+  onReply, 
+  allMessages,
+  otherUserName 
+}: { 
+  msg: Message, 
+  isOwn: boolean, 
+  onReply: (m: Message) => void,
+  allMessages: Message[],
+  otherUserName: string
+}) => {
+  const [offsetX, setOffsetX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const startX = useRef(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startX.current = e.touches[0].clientX;
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const diff = e.touches[0].clientX - startX.current;
+    
+    // Only allow swiping to the right, maxing out at 70px
+    if (diff > 0 && diff < 70) {
+      setOffsetX(diff);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    if (offsetX > 50) {
+      onReply(msg);
+    }
+    setOffsetX(0); 
+  };
+
+  const quotedMsg = msg.reply_to_id ? allMessages.find(m => m.id === msg.reply_to_id) : null;
+
+  return (
+    // Added 'group' here so we can detect desktop mouse hovers
+    <div className={`relative flex w-full items-center group ${isOwn ? 'justify-end' : 'justify-start'}`}>
+      
+      {/* MOBILE: Hidden Reply Icon that fades in as you swipe */}
+      <div 
+        className={`absolute left-0 flex md:hidden items-center justify-center transition-opacity duration-100 ${isOwn ? '-ml-12' : ''}`}
+        style={{ opacity: Math.min(offsetX / 50, 1) }}
+      >
+        <div className="bg-slate-200 dark:bg-slate-700 p-2 rounded-full">
+          <Reply className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+        </div>
+      </div>
+
+      {/* DESKTOP: Hover Reply Button (Left side if it's your message) */}
+      {isOwn && (
+        <button
+          onClick={() => onReply(msg)}
+          className="hidden md:flex opacity-0 group-hover:opacity-100 mr-2 p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-full transition-all"
+          title="Reply"
+        >
+          <Reply className="w-4 h-4" />
+        </button>
+      )}
+
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ 
+          transform: `translateX(${offsetX}px)`, 
+          transition: isDragging ? 'none' : 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)' 
+        }}
+        className={`max-w-[85%] md:max-w-[75%] p-3.5 md:p-4 rounded-[1.5rem] text-sm font-medium shadow-sm z-10 ${
+          isOwn
+            ? 'bg-indigo-600 text-white rounded-tr-none'
+            : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 border border-slate-100 dark:border-slate-700 rounded-tl-none'
+        }`}
+      >
+        {/* Render the quoted message block if this is a reply */}
+        {quotedMsg && (
+          <div className={`mb-2 p-2.5 rounded-xl text-xs border-l-4 ${
+            isOwn 
+              ? 'bg-indigo-700/50 border-indigo-300 text-indigo-100' 
+              : 'bg-slate-100 dark:bg-slate-700/50 border-indigo-600 text-slate-500 dark:text-slate-400'
+          }`}>
+            <p className={`font-black mb-0.5 ${isOwn ? 'text-indigo-200' : 'text-indigo-600'}`}>
+              {quotedMsg.sender_id === msg.sender_id ? 'You' : otherUserName}
+            </p>
+            <p className="truncate opacity-90">{quotedMsg.content}</p>
+          </div>
+        )}
+
+        <p>{msg.content}</p>
+        <p className={`text-[10px] mt-1.5 font-black uppercase tracking-tighter ${isOwn ? 'text-indigo-200' : 'text-slate-400'}`}>
+          {msg.created_at ? format(new Date(msg.created_at), 'HH:mm') : ''}
+        </p>
+      </div>
+
+      {/* DESKTOP: Hover Reply Button (Right side if it's their message) */}
+      {!isOwn && (
+        <button
+          onClick={() => onReply(msg)}
+          className="hidden md:flex opacity-0 group-hover:opacity-100 ml-2 p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-full transition-all"
+          title="Reply"
+        >
+          <Reply className="w-4 h-4" />
+        </button>
+      )}
+    </div>
+  );
+};
+  // Find the text of the message being quoted, if it exists
+  const quotedMsg = msg.reply_to_id ? allMessages.find(m => m.id === msg.reply_to_id) : null;
+
+  return (
+    <div className={`relative flex w-full items-center ${isOwn ? 'justify-end' : 'justify-start'}`}>
+      
+      {/* Hidden Reply Icon that fades in as you swipe */}
+      <div 
+        className={`absolute left-0 flex items-center justify-center transition-opacity duration-100 ${isOwn ? '-ml-12' : ''}`}
+        style={{ opacity: Math.min(offsetX / 50, 1) }}
+      >
+        <div className="bg-slate-200 dark:bg-slate-700 p-2 rounded-full">
+          <Reply className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+        </div>
+      </div>
+
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ 
+          transform: `translateX(${offsetX}px)`, 
+          transition: isDragging ? 'none' : 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)' 
+        }}
+        className={`max-w-[85%] md:max-w-[75%] p-3.5 md:p-4 rounded-[1.5rem] text-sm font-medium shadow-sm z-10 ${
+          isOwn
+            ? 'bg-indigo-600 text-white rounded-tr-none'
+            : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 border border-slate-100 dark:border-slate-700 rounded-tl-none'
+        }`}
+      >
+        {/* Render the quoted message block if this is a reply */}
+        {quotedMsg && (
+          <div className={`mb-2 p-2.5 rounded-xl text-xs border-l-4 ${
+            isOwn 
+              ? 'bg-indigo-700/50 border-indigo-300 text-indigo-100' 
+              : 'bg-slate-100 dark:bg-slate-700/50 border-indigo-600 text-slate-500 dark:text-slate-400'
+          }`}>
+            <p className={`font-black mb-0.5 ${isOwn ? 'text-indigo-200' : 'text-indigo-600'}`}>
+              {quotedMsg.sender_id === msg.sender_id ? 'You' : otherUserName}
+            </p>
+            <p className="truncate opacity-90">{quotedMsg.content}</p>
+          </div>
+        )}
+
+        <p>{msg.content}</p>
+        <p className={`text-[10px] mt-1.5 font-black uppercase tracking-tighter ${isOwn ? 'text-indigo-200' : 'text-slate-400'}`}>
+          {msg.created_at ? format(new Date(msg.created_at), 'HH:mm') : ''}
+        </p>
+      </div>
+    </div>
+  );
+};
+
 const Messages: React.FC = () => {
   const { user } = useAuth();
   const { socket, clearNotifications } = useSocket() as any; 
@@ -35,6 +204,7 @@ const Messages: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null); // NEW: Tracks active reply
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
@@ -135,7 +305,8 @@ const Messages: React.FC = () => {
       const messageData = {
         receiver_id: selectedConv.other_user_id,
         listing_id: selectedConv.listing_id,
-        content: newMessage
+        content: newMessage,
+        reply_to_id: replyingTo?.id || null // NEW: Attach the quoted message ID
       };
 
       const response = await api.post('/messages', messageData);
@@ -146,6 +317,7 @@ const Messages: React.FC = () => {
       }
 
       setNewMessage('');
+      setReplyingTo(null); // Clear the reply staging area after sending
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -170,7 +342,6 @@ const Messages: React.FC = () => {
   };
 
   return (
-    // Reverted the container height back to normal, since the chat window will now break out of it!
     <div className="max-w-6xl mx-auto h-[calc(100dvh-7rem)] md:h-[calc(100vh-12rem)] flex bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors">
       
       {/* SIDEBAR */}
@@ -224,11 +395,7 @@ const Messages: React.FC = () => {
         </div>
       </div>
 
-      {/* CHAT AREA: 
-        The magic happens here! On mobile, it becomes "fixed inset-0 z-[100]" 
-        which forces it to overlay the ENTIRE screen above all navbars.
-        On desktop (md:), it goes back to normal relative positioning.
-      */}
+      {/* CHAT AREA */}
       <div className={`${!selectedConv ? 'hidden md:flex' : 'flex fixed inset-0 z-[100] md:relative md:z-auto md:inset-auto'} flex-1 flex-col bg-slate-50 dark:bg-slate-900 w-full`}>
         {selectedConv ? (
           <>
@@ -265,25 +432,16 @@ const Messages: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-              {Array.isArray(messages) && messages.map((msg, idx) => {
-                const isOwn = msg.sender_id === user?.id;
-                return (
-                  <div key={`msg-${msg.id || idx}`} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                    <div
-                      className={`max-w-[85%] md:max-w-[75%] p-3.5 md:p-4 rounded-[1.5rem] text-sm font-medium shadow-sm ${
-                        isOwn
-                          ? 'bg-indigo-600 text-white rounded-tr-none'
-                          : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 border border-slate-100 dark:border-slate-700 rounded-tl-none'
-                      }`}
-                    >
-                      <p>{msg.content}</p>
-                      <p className={`text-[10px] mt-1.5 font-black uppercase tracking-tighter ${isOwn ? 'text-indigo-200' : 'text-slate-400'}`}>
-                        {msg.created_at ? format(new Date(msg.created_at), 'HH:mm') : ''}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
+              {Array.isArray(messages) && messages.map((msg, idx) => (
+                <MessageBubble 
+                  key={`msg-${msg.id || idx}`}
+                  msg={msg}
+                  isOwn={msg.sender_id === user?.id}
+                  onReply={(m) => setReplyingTo(m)}
+                  allMessages={messages}
+                  otherUserName={selectedConv.other_user_name}
+                />
+              ))}
               
               {isTyping && (
                 <div className="flex justify-start animate-in fade-in duration-300">
@@ -298,8 +456,28 @@ const Messages: React.FC = () => {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Form padded at the bottom to ensure it clears the iOS swipe indicator */}
-            <div className="p-4 pb-6 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+            <div className="p-4 pb-6 md:p-6 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 relative">
+              
+              {/* REPLY STAGING PREVIEW */}
+              {replyingTo && (
+                <div className="absolute bottom-[calc(100%+8px)] left-4 right-4 md:left-6 md:right-6 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-2xl flex justify-between items-center shadow-lg animate-in slide-in-from-bottom-2">
+                  <div className="border-l-4 border-indigo-600 pl-3 flex-1 min-w-0">
+                    <p className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400">
+                      Replying to {replyingTo.sender_id === user?.id ? 'yourself' : selectedConv.other_user_name}
+                    </p>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-300 truncate">
+                      {replyingTo.content}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setReplyingTo(null)}
+                    className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 ml-2"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
+
               <form onSubmit={handleSendMessage} className="flex gap-2 md:gap-3">
                 <input
                   type="text"

@@ -111,7 +111,6 @@ async function startServer() {
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
     
     try {
-      // Decode the Supabase token without verifying against a local secret
       const decoded: any = jwt.decode(token); 
       if (!decoded) return res.status(401).json({ error: 'Invalid token' });
       
@@ -123,6 +122,23 @@ async function startServer() {
       next();
     } catch (err) {
       res.status(401).json({ error: 'Invalid token' });
+    }
+  };
+
+  // --- NEW: STRICT ADMIN MIDDLEWARE ---
+  const requireAdmin = async (req: any, res: any, next: any) => {
+    try {
+      // Always verify against the live database, ignoring what the frontend token says
+      const result = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.id]);
+      const userRole = result.rows[0]?.role;
+
+      if (userRole !== 'admin') {
+        return res.status(403).json({ error: 'Forbidden: Admin access required.' });
+      }
+      
+      next(); // User is confirmed admin, proceed to the route
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to verify admin status' });
     }
   };
 
@@ -231,6 +247,7 @@ async function startServer() {
       const listing = listingResult.rows[0];
       
       if (!listing) return res.status(404).json({ error: 'Not found' });
+      // Keep the inline check here because BOTH the seller AND the admin should be able to delete listings
       if (listing.seller_id !== req.user.id && req.user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
 
       await pool.query('DELETE FROM listings WHERE id = $1', [req.params.id]);
@@ -289,9 +306,13 @@ async function startServer() {
 
       await client.query('BEGIN');
       for (const item of cartItems) {
+        // We still check if the seller manually marked it as sold before allowing the purchase
         if (item.status !== 'available') throw new Error(`Item ${item.listing_id} is no longer available`);
+        
         await client.query('INSERT INTO transactions (buyer_id, listing_id, amount) VALUES ($1, $2, $3)', [req.user.id, item.listing_id, item.price]);
-        await client.query("UPDATE listings SET sold_count = sold_count + 1, status = 'sold' WHERE id = $1", [item.listing_id]);
+        
+        // FIXED: We now ONLY increment the sold_count. We do NOT change the status to 'sold'.
+        await client.query("UPDATE listings SET sold_count = sold_count + 1 WHERE id = $1", [item.listing_id]);
       }
       await client.query('DELETE FROM cart_items WHERE user_id = $1', [req.user.id]);
       await client.query('COMMIT');
@@ -358,8 +379,9 @@ async function startServer() {
   app.post('/api/messages', authenticate, async (req: any, res) => {
     try {
       const result = await pool.query(
-        'INSERT INTO messages (sender_id, receiver_id, listing_id, content) VALUES ($1, $2, $3, $4) RETURNING *',
-        [req.user.id, req.body.receiver_id, req.body.listing_id, req.body.content]
+        // Added reply_to_id to the INSERT statement
+        'INSERT INTO messages (sender_id, receiver_id, listing_id, content, reply_to_id) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [req.user.id, req.body.receiver_id, req.body.listing_id, req.body.content, req.body.reply_to_id || null]
       );
       res.json(result.rows[0]);
     } catch (err) {
@@ -367,9 +389,18 @@ async function startServer() {
     }
   });
 
-  // --- ADMIN & REPORT ROUTES ---
-  app.get('/api/admin/stats', authenticate, async (req: any, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  app.post('/api/reports', authenticate, async (req: any, res) => {
+    try {
+      await pool.query('INSERT INTO reports (reporter_id, reported_id, reason) VALUES ($1, $2, $3)', [req.user.id, req.body.reported_id, req.body.reason]);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to submit report' });
+    }
+  });
+
+  // --- ADMIN & REPORT ROUTES (SECURED WITH requireAdmin) ---
+  
+  app.get('/api/admin/stats', authenticate, requireAdmin, async (req: any, res) => {
     try {
       const [usersRes, listingsRes, messagesRes, transRes, reportsRes] = await Promise.all([
         pool.query('SELECT COUNT(*) as count FROM users'),
@@ -393,8 +424,7 @@ async function startServer() {
     }
   });
 
-  app.get('/api/admin/users', authenticate, async (req: any, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  app.get('/api/admin/users', authenticate, requireAdmin, async (req: any, res) => {
     try {
       const result = await pool.query('SELECT id, name, email, role, created_at FROM users');
       res.json(result.rows);
@@ -403,8 +433,7 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/admin/users/:id', authenticate, async (req: any, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  app.delete('/api/admin/users/:id', authenticate, requireAdmin, async (req: any, res) => {
     try {
       await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
       res.json({ success: true });
@@ -413,17 +442,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/reports', authenticate, async (req: any, res) => {
-    try {
-      await pool.query('INSERT INTO reports (reporter_id, reported_id, reason) VALUES ($1, $2, $3)', [req.user.id, req.body.reported_id, req.body.reason]);
-      res.json({ success: true });
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to submit report' });
-    }
-  });
-
-  app.get('/api/admin/reports', authenticate, async (req: any, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  app.get('/api/admin/reports', authenticate, requireAdmin, async (req: any, res) => {
     try {
       const result = await pool.query(`
         SELECT reports.*, u1.name as reporter_name, u2.name as reported_name 
@@ -436,8 +455,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/admin/reports/:id/resolve', authenticate, async (req: any, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  app.post('/api/admin/reports/:id/resolve', authenticate, requireAdmin, async (req: any, res) => {
     try {
       await pool.query("UPDATE reports SET status = 'resolved' WHERE id = $1", [req.params.id]);
       res.json({ success: true });
@@ -446,8 +464,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/admin/warnings', authenticate, async (req: any, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  app.post('/api/admin/warnings', authenticate, requireAdmin, async (req: any, res) => {
     try {
       await pool.query('INSERT INTO warnings (user_id, admin_id, message) VALUES ($1, $2, $3)', [req.body.user_id, req.user.id, req.body.message]);
       res.json({ success: true });
@@ -456,7 +473,6 @@ async function startServer() {
     }
   });
 
- // FIXED: Join with users table to get the admin's name AND hide after 7 days
   app.get('/api/warnings', authenticate, async (req: any, res) => {
     try {
       const result = await pool.query(`
@@ -473,7 +489,6 @@ async function startServer() {
     }
   });
 
- // --- USER DATA ROUTE (Replaces the old STUB) ---
   app.get('/api/users/:id', async (req, res) => {
     try {
       const result = await pool.query('SELECT id, name, email, role, created_at FROM users WHERE id = $1', [req.params.id]);

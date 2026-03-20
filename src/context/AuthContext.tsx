@@ -2,8 +2,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 
-// Note: Removed 'api' import since we no longer need the sync call here
-
 interface User {
   id: string;
   name: string;
@@ -23,35 +21,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const mapUser = (supabaseUser: SupabaseUser | null): User | null => {
-    if (!supabaseUser) return null;
-    return {
+  // NEW: This async function fetches the real, live data from your database
+  const fetchLiveUser = async (supabaseUser: SupabaseUser | null) => {
+    if (!supabaseUser) {
+      setUser(null);
+      return;
+    }
+
+    // Default fallback values from their auth session
+    let liveUser: User = {
       id: supabaseUser.id,
       name: supabaseUser.user_metadata?.full_name || supabaseUser.email?.split('@')[0] || 'User',
       email: supabaseUser.email || '',
-      role: supabaseUser.user_metadata?.role || 'student',
+      role: supabaseUser.user_metadata?.role || 'student', 
     };
+
+    try {
+      // Query the actual 'users' table to see if you manually gave them admin rights
+      const { data, error } = await supabase
+        .from('users')
+        .select('role, name') // Grab their true role and name
+        .eq('id', supabaseUser.id)
+        .single();
+
+      if (data && !error) {
+        liveUser.role = data.role; // Override with the database role!
+        if (data.name) liveUser.name = data.name; 
+      }
+    } catch (err) {
+      console.error("Error fetching live user data:", err);
+    }
+
+    setUser(liveUser);
   };
 
   useEffect(() => {
-    // Initial session check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(mapUser(session?.user ?? null));
+    const initializeAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetchLiveUser(session?.user ?? null);
+      
       if (session?.access_token) {
         localStorage.setItem('token', session.access_token);
       }
       setLoading(false);
-    });
+    };
 
-    // Listen for auth state changes
+    initializeAuth();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const mappedUser = mapUser(session?.user ?? null);
-      setUser(mappedUser);
+      setLoading(true); // Briefly show loading while we fetch the live role
+      await fetchLiveUser(session?.user ?? null);
       
       if (session?.access_token) {
         localStorage.setItem('token', session.access_token);
-        // The manual axios/api sync call is removed. 
-        // Your Supabase SQL Trigger handles the 'public.users' table automatically now.
       } else {
         localStorage.removeItem('token');
       }
