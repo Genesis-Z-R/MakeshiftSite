@@ -59,7 +59,7 @@ const Cart: React.FC = () => {
   }
 
   return (
-    <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 pb-32">
+    <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 pb-40">
       <div className="sticky top-0 z-30 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md px-4 py-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-900">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-slate-900 dark:text-white">
@@ -115,7 +115,8 @@ const Cart: React.FC = () => {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 p-4 pb-safe z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] dark:shadow-none">
+      {/* FIXED: Shifted up by 72px on mobile to clear the bottom navigation tab bar */}
+      <div className="fixed bottom-[72px] md:bottom-0 left-0 right-0 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 p-4 z-40 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] dark:shadow-none">
         <div className="max-w-3xl mx-auto">
           <div className="flex justify-between items-end mb-4 px-2">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total</span>

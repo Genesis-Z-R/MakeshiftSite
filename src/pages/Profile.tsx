@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { useAccessibility } from '../context/AccessibilityContext';
+import { useNavigate, Link } from 'react-router-dom';
 import { Package, Trash2, ShoppingBag, LogOut, AlertTriangle } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 interface UserListing {
@@ -14,6 +14,7 @@ interface UserListing {
   image_url: string;
   category: string;
   created_at: string;
+  sold_count?: number;
 }
 
 interface Transaction {
@@ -33,7 +34,8 @@ interface Warning {
 }
 
 const Profile: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   const { announce } = useAccessibility();
   const [listings, setListings] = useState<UserListing[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -42,6 +44,7 @@ const Profile: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'listings' | 'purchases'>('listings');
   const [listingToDelete, setListingToDelete] = useState<number | null>(null);
   const [listingToMarkSold, setListingToMarkSold] = useState<number | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -99,6 +102,14 @@ const Profile: React.FC = () => {
     }
   };
 
+  const handleLogout = async () => {
+    if (signOut) {
+      await signOut();
+    }
+    setShowLogoutConfirm(false);
+    navigate('/login');
+  };
+
   return (
     <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
       <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 pt-12 pb-6 px-4 text-center">
@@ -108,7 +119,10 @@ const Profile: React.FC = () => {
         <h1 className="text-2xl font-black text-slate-900 dark:text-white mb-1">{user!.name}</h1>
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6">{user!.email}</p>
         
-        <button onClick={logout} className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">
+        <button 
+          onClick={() => setShowLogoutConfirm(true)} 
+          className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+        >
           <LogOut className="h-4 w-4" /> Sign Out
         </button>
       </div>
@@ -148,7 +162,7 @@ const Profile: React.FC = () => {
         </button>
       </div>
 
-      <div className="flex-1 max-w-7xl mx-auto w-full px-2 md:px-8 py-6">
+      <div className="flex-1 max-w-7xl mx-auto w-full px-2 md:px-8 py-6 pb-24">
         {activeTab === 'listings' && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
             {listings.map(listing => (
@@ -174,6 +188,11 @@ const Profile: React.FC = () => {
                   </Link>
                   <div className="mt-auto pt-2 flex items-center justify-between">
                     <span className="text-sm md:text-base font-black text-slate-900 dark:text-white">GH₵{Number(listing.price).toLocaleString()}</span>
+                    {(listing.sold_count ?? 0) > 0 && (
+                      <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 dark:text-indigo-400 dark:bg-indigo-900/30 px-2 py-0.5 rounded">
+                        {listing.sold_count} Sold
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 border-t border-slate-100 dark:border-slate-800">
@@ -218,6 +237,16 @@ const Profile: React.FC = () => {
 
       <ConfirmationModal isOpen={listingToDelete !== null} onClose={() => setListingToDelete(null)} onConfirm={handleDelete} title="Delete Listing" message="Are you sure? This cannot be undone." confirmText="Delete" type="danger" />
       <ConfirmationModal isOpen={listingToMarkSold !== null} onClose={() => setListingToMarkSold(null)} onConfirm={handleMarkAsSold} title="Mark as Sold" message="Item will be marked as sold." confirmText="Confirm" />
+      
+      <ConfirmationModal 
+        isOpen={showLogoutConfirm} 
+        onClose={() => setShowLogoutConfirm(false)} 
+        onConfirm={handleLogout} 
+        title="Logout" 
+        message="Are you sure you want to logout of your account?" 
+        confirmText="Logout" 
+        type="danger" 
+      />
     </div>
   );
 };

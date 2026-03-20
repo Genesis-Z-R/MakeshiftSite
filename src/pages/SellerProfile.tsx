@@ -12,6 +12,7 @@ interface Listing {
   image_url: string;
   created_at: string;
   status: string;
+  sold_count?: number;
 }
 
 interface SellerInfo {
@@ -109,10 +110,15 @@ const SellerProfile: React.FC = () => {
                       {listing.title}
                     </h3>
                   </Link>
-                  <div className="mt-auto pt-2">
+                  <div className="mt-auto pt-2 flex items-center justify-between">
                     <span className="text-sm md:text-base font-black text-slate-900 dark:text-white">
                       GH₵{Number(listing.price).toLocaleString()}
                     </span>
+                    {(listing.sold_count ?? 0) > 0 && (
+                      <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 dark:text-indigo-400 dark:bg-indigo-900/30 px-2 py-0.5 rounded">
+                        {listing.sold_count} Sold
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
