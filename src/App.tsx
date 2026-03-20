@@ -20,7 +20,6 @@ import Cart from './pages/Cart';
 import ForgotPassword from './pages/ForgotPassword';
 import UpdatePassword from './pages/UpdatePassword';
 
-// FIXED: Added a loading spinner so the screen doesn't "freeze" or go blank while logging in
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return (
@@ -43,12 +42,12 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return user?.role === 'admin' ? <>{children}</> : <Navigate to="/" />;
 };
 
-// FIXED: Created a layout wrapper to hide navigation on auth pages
 const AppLayout = () => {
   const location = useLocation();
   
-  // Check if the current URL is an auth-related page
-  const isAuthPage = ['/login', '/register', '/forgot-password', '/update-password'].includes(location.pathname);
+  // FIXED: Smarter path matching. This catches '/login', '/login/', etc.
+  const path = location.pathname.replace(/\/$/, ''); 
+  const isAuthPage = ['/login', '/register', '/forgot-password', '/update-password'].includes(path);
 
   return (
     <div className="min-h-screen flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50 font-sans transition-colors duration-200">
@@ -56,7 +55,6 @@ const AppLayout = () => {
         Skip to main content
       </a>
       
-      {/* Only show the Navbar if we are NOT on an auth page */}
       {!isAuthPage && <Navbar />}
       
       <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col">
@@ -77,7 +75,6 @@ const AppLayout = () => {
         </Routes>
       </main>
 
-      {/* Only show Cart and Footer if we are NOT on an auth page */}
       {!isAuthPage && <FloatingCart />}
       
       {!isAuthPage && (
@@ -99,7 +96,6 @@ export default function App() {
       <AuthProvider>
         <SocketProvider>
           <CartProvider>
-            {/* The Router must wrap the AppLayout so useLocation works */}
             <Router>
               <AppLayout />
             </Router>

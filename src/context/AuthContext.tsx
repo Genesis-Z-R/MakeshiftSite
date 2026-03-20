@@ -53,7 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    let mounted = true; // Safety flag to prevent memory leaks and hanging
+    let mounted = true; // FIXED: Added safety flag to stop memory leaks and freezing
 
     const initializeAuth = async () => {
       try {
@@ -77,7 +77,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!mounted) return;
       
-      setLoading(true); 
       await fetchLiveUser(session?.user ?? null);
       
       if (session?.access_token) {
@@ -90,7 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => {
-      mounted = false; // Clean up the flag when the component is destroyed
+      mounted = false; 
       subscription.unsubscribe();
     };
   }, []);
