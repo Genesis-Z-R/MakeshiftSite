@@ -12,7 +12,7 @@ interface Message {
   listing_id: number;
   content: string;
   created_at: string;
-  reply_to_id?: number; // NEW: Tracks quoted messages
+  reply_to_id?: number;
   sender_name?: string;
   receiver_name?: string;
   listing_title?: string;
@@ -28,7 +28,7 @@ interface Conversation {
   unread_count: number;
 }
 
-// --- NEW: ISOLATED BUBBLE COMPONENT FOR 60FPS SWIPE PERFORMANCE ---
+// --- ISOLATED BUBBLE COMPONENT ---
 const MessageBubble = ({ 
   msg, 
   isOwn, 
@@ -55,7 +55,6 @@ const MessageBubble = ({
     if (!isDragging) return;
     const diff = e.touches[0].clientX - startX.current;
     
-    // Only allow swiping to the right, maxing out at 70px
     if (diff > 0 && diff < 70) {
       setOffsetX(diff);
     }
@@ -72,10 +71,9 @@ const MessageBubble = ({
   const quotedMsg = msg.reply_to_id ? allMessages.find(m => m.id === msg.reply_to_id) : null;
 
   return (
-    // Added 'group' here so we can detect desktop mouse hovers
     <div className={`relative flex w-full items-center group ${isOwn ? 'justify-end' : 'justify-start'}`}>
       
-      {/* MOBILE: Hidden Reply Icon that fades in as you swipe */}
+      {/* MOBILE: Hidden Reply Icon */}
       <div 
         className={`absolute left-0 flex md:hidden items-center justify-center transition-opacity duration-100 ${isOwn ? '-ml-12' : ''}`}
         style={{ opacity: Math.min(offsetX / 50, 1) }}
@@ -110,7 +108,6 @@ const MessageBubble = ({
             : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 border border-slate-100 dark:border-slate-700 rounded-tl-none'
         }`}
       >
-        {/* Render the quoted message block if this is a reply */}
         {quotedMsg && (
           <div className={`mb-2 p-2.5 rounded-xl text-xs border-l-4 ${
             isOwn 
@@ -143,59 +140,8 @@ const MessageBubble = ({
     </div>
   );
 };
-  // Find the text of the message being quoted, if it exists
-  const quotedMsg = msg.reply_to_id ? allMessages.find(m => m.id === msg.reply_to_id) : null;
 
-  return (
-    <div className={`relative flex w-full items-center ${isOwn ? 'justify-end' : 'justify-start'}`}>
-      
-      {/* Hidden Reply Icon that fades in as you swipe */}
-      <div 
-        className={`absolute left-0 flex items-center justify-center transition-opacity duration-100 ${isOwn ? '-ml-12' : ''}`}
-        style={{ opacity: Math.min(offsetX / 50, 1) }}
-      >
-        <div className="bg-slate-200 dark:bg-slate-700 p-2 rounded-full">
-          <Reply className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-        </div>
-      </div>
-
-      <div
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        style={{ 
-          transform: `translateX(${offsetX}px)`, 
-          transition: isDragging ? 'none' : 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)' 
-        }}
-        className={`max-w-[85%] md:max-w-[75%] p-3.5 md:p-4 rounded-[1.5rem] text-sm font-medium shadow-sm z-10 ${
-          isOwn
-            ? 'bg-indigo-600 text-white rounded-tr-none'
-            : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 border border-slate-100 dark:border-slate-700 rounded-tl-none'
-        }`}
-      >
-        {/* Render the quoted message block if this is a reply */}
-        {quotedMsg && (
-          <div className={`mb-2 p-2.5 rounded-xl text-xs border-l-4 ${
-            isOwn 
-              ? 'bg-indigo-700/50 border-indigo-300 text-indigo-100' 
-              : 'bg-slate-100 dark:bg-slate-700/50 border-indigo-600 text-slate-500 dark:text-slate-400'
-          }`}>
-            <p className={`font-black mb-0.5 ${isOwn ? 'text-indigo-200' : 'text-indigo-600'}`}>
-              {quotedMsg.sender_id === msg.sender_id ? 'You' : otherUserName}
-            </p>
-            <p className="truncate opacity-90">{quotedMsg.content}</p>
-          </div>
-        )}
-
-        <p>{msg.content}</p>
-        <p className={`text-[10px] mt-1.5 font-black uppercase tracking-tighter ${isOwn ? 'text-indigo-200' : 'text-slate-400'}`}>
-          {msg.created_at ? format(new Date(msg.created_at), 'HH:mm') : ''}
-        </p>
-      </div>
-    </div>
-  );
-};
-
+// --- MAIN MESSAGES COMPONENT ---
 const Messages: React.FC = () => {
   const { user } = useAuth();
   const { socket, clearNotifications } = useSocket() as any; 
@@ -204,7 +150,7 @@ const Messages: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [replyingTo, setReplyingTo] = useState<Message | null>(null); // NEW: Tracks active reply
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
@@ -306,7 +252,7 @@ const Messages: React.FC = () => {
         receiver_id: selectedConv.other_user_id,
         listing_id: selectedConv.listing_id,
         content: newMessage,
-        reply_to_id: replyingTo?.id || null // NEW: Attach the quoted message ID
+        reply_to_id: replyingTo?.id || null 
       };
 
       const response = await api.post('/messages', messageData);
@@ -317,7 +263,7 @@ const Messages: React.FC = () => {
       }
 
       setNewMessage('');
-      setReplyingTo(null); // Clear the reply staging area after sending
+      setReplyingTo(null);
     } catch (error) {
       console.error('Error sending message:', error);
     }
