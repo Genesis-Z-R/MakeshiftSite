@@ -17,6 +17,8 @@ import Messages from './pages/Messages';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
 import Cart from './pages/Cart';
+import ForgotPassword from './pages/ForgotPassword';
+import UpdatePassword from './pages/UpdatePassword';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -48,6 +50,7 @@ export default function App() {
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
+                   <Route path="/update-password" element={<UpdatePassword />} />
                     <Route path="/listing/:id" element={<ListingDetail />} />
                     <Route path="/seller/:id" element={<SellerProfile />} />
                     <Route path="/cart" element={
