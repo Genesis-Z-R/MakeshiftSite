@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { useAccessibility } from '../context/AccessibilityContext';
-import { Shield, Users, Package, Trash2, Activity, MessageSquare, CreditCard, Clock, Flag, AlertTriangle } from 'lucide-react';
+import { Shield, Users, Package, Trash2, Activity, MessageSquare, CreditCard, Flag, AlertTriangle, CheckCircle } from 'lucide-react';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { useSocket } from '../context/SocketContext';
 
@@ -36,7 +36,6 @@ interface Report {
 }
 
 const Admin: React.FC = () => {
-  // --- NEW SECURITY IMPORTS ---
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -52,9 +51,7 @@ const Admin: React.FC = () => {
   const [sendingWarning, setSendingWarning] = useState(false);
   const { onlineUsers = [] } = useSocket();
 
-  // --- NEW ROUTE PROTECTION ---
   useEffect(() => {
-    // If they are not logged in, or their role is not admin, kick them to the home page
     if (!user || user.role !== 'admin') {
       navigate('/');
     }
@@ -82,7 +79,6 @@ const Admin: React.FC = () => {
   };
 
   useEffect(() => {
-    // Only fetch data if they are an admin
     if (user && user.role === 'admin') {
       fetchData();
     }
@@ -92,8 +88,10 @@ const Admin: React.FC = () => {
     try {
       await api.post(`/admin/reports/${reportId}/resolve`);
       setReports(reports.map(r => r.id === reportId ? { ...r, status: 'resolved' } : r));
+      announce('Report resolved.');
     } catch (error) {
       console.error('Error resolving report:', error);
+      announce('Failed to resolve report.', 'assertive');
     }
   };
 
@@ -107,6 +105,7 @@ const Admin: React.FC = () => {
       announce('Warning sent.');
     } catch (error) {
       console.error('Error sending warning:', error);
+      announce('Failed to send warning.', 'assertive');
     } finally {
       setSendingWarning(false);
     }
@@ -121,197 +120,207 @@ const Admin: React.FC = () => {
       announce('User deleted.');
     } catch (error) {
       console.error('Error deleting user:', error);
+      announce('Failed to delete user.', 'assertive');
     }
   };
 
-  // --- PREVENT UI FLASH ---
-  // If the redirect hasn't happened yet, return null so they don't see the dashboard
   if (!user || user.role !== 'admin') return null;
 
   if (loading) return (
-    <div className="max-w-7xl mx-auto px-4 py-20 text-center">
-      <div className="animate-spin h-10 w-10 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-      <p className="font-black text-slate-400 uppercase tracking-widest text-xs">Initializing Console...</p>
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="flex flex-col items-center gap-4">
+        <div className="animate-spin h-8 w-8 border-4 border-slate-900 dark:border-white border-t-transparent rounded-full"></div>
+        <p className="font-black text-[10px] text-slate-400 uppercase tracking-widest">Initializing Console...</p>
+      </div>
     </div>
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10">
-      <header className="flex items-center gap-5 mb-10">
-        <div className="bg-indigo-600 p-3 rounded-2xl shadow-lg shadow-indigo-100 dark:shadow-none">
-          <Shield className="h-7 w-7 text-white" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-slate-50 tracking-tight">Console</h1>
-          <p className="text-sm font-bold text-slate-400 uppercase tracking-wider">System Management</p>
-        </div>
-      </header>
-
-      {/* STATS GRID */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-10">
-        {[
-          { label: 'Total Users', val: stats?.totalUsers, icon: <Users className="h-4 w-4 text-indigo-600" />, sub: `${onlineUsers.length} Live` },
-          { label: 'Reports', val: stats?.totalReports, icon: <Flag className="h-4 w-4 text-red-600" />, danger: (stats?.totalReports || 0) > 0 },
-          { label: 'Listings', val: stats?.totalListings, icon: <Package className="h-4 w-4 text-emerald-600" /> },
-          { label: 'Messages', val: stats?.totalMessages, icon: <MessageSquare className="h-4 w-4 text-amber-600" /> },
-          { label: 'Volume', val: stats?.totalTransactions, icon: <CreditCard className="h-4 w-4 text-purple-600" /> },
-        ].map((s, i) => (
-          <div key={i} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg">{s.icon}</div>
-              {s.sub && <span className="text-[9px] font-black text-green-500 uppercase">{s.sub}</span>}
-            </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{s.label}</p>
-            <h3 className={`text-xl font-black ${s.danger ? 'text-red-600' : 'text-slate-900 dark:text-slate-50'}`}>{s.val || 0}</h3>
+    <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col pb-20">
+      
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-40 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md px-4 py-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-900">
+        <div className="flex items-center gap-3">
+          <div className="bg-slate-900 dark:bg-white p-2 rounded-xl shrink-0">
+            <Shield className="h-5 w-5 text-white dark:text-slate-900" />
           </div>
-        ))}
+          <div>
+            <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight leading-none mb-1">Console</h1>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">System Management</p>
+          </div>
+        </div>
       </div>
 
-      {/* TABS */}
-      <div className="flex gap-6 mb-8 border-b border-slate-100 dark:border-slate-800">
+      {/* Horizontal Scroll Stats Bar */}
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 overflow-x-auto no-scrollbar">
+        <div className="flex gap-4 p-4 min-w-max max-w-7xl mx-auto">
+          {[
+            { label: 'Users', val: stats?.totalUsers, icon: <Users className="h-4 w-4" />, sub: `${onlineUsers.length} Live` },
+            { label: 'Reports', val: stats?.totalReports, icon: <Flag className="h-4 w-4" />, danger: (stats?.totalReports || 0) > 0 },
+            { label: 'Listings', val: stats?.totalListings, icon: <Package className="h-4 w-4" /> },
+            { label: 'Messages', val: stats?.totalMessages, icon: <MessageSquare className="h-4 w-4" /> },
+            { label: 'Volume', val: stats?.totalTransactions, icon: <CreditCard className="h-4 w-4" /> },
+          ].map((s, i) => (
+            <div key={i} className="flex flex-col justify-between bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 w-32 shrink-0">
+              <div className="flex justify-between items-start mb-2">
+                <div className={`p-1.5 rounded-lg ${s.danger ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+                  {s.icon}
+                </div>
+                {s.sub && <span className="text-[8px] font-black text-green-500 uppercase">{s.sub}</span>}
+              </div>
+              <div>
+                <h3 className={`text-xl font-black leading-none mb-1 ${s.danger ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>{s.val || 0}</h3>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Sticky Tabs */}
+      <div className="sticky top-[73px] md:top-[76px] z-30 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex justify-center">
         {['users', 'reports', 'errors'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab as any)}
-            className={`pb-4 px-1 text-xs font-black uppercase tracking-widest relative ${activeTab === tab ? 'text-indigo-600' : 'text-slate-400'}`}
+            className={`flex-1 max-w-[200px] py-4 text-[11px] font-black uppercase tracking-widest border-b-2 transition-colors ${activeTab === tab ? 'border-slate-900 text-slate-900 dark:border-white dark:text-white' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
           >
             {tab}
-            {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-t-full"></div>}
           </button>
         ))}
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
+      {/* Main Content Area */}
+      <div className="flex-1 w-full max-w-7xl mx-auto md:px-4 md:py-6">
+        
+        {/* USERS LIST (Replaced Table) */}
         {activeTab === 'users' && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                  <th className="px-6 py-4">Identity</th>
-                  <th className="px-6 py-4">Role</th>
-                  <th className="px-6 py-4">Registry</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {(Array.isArray(users) ? users : []).map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xs font-black">{u.name.charAt(0)}</div>
-                        <div>
-                          <p className="text-sm font-bold text-slate-900 dark:text-slate-50">{u.name}</p>
-                          <p className="text-[10px] font-medium text-slate-400">{u.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-[9px] font-black px-2 py-1 rounded-md uppercase bg-slate-100 dark:bg-slate-800 text-slate-500">{u.role}</span>
-                    </td>
-                    <td className="px-6 py-4 text-xs font-bold text-slate-500">{new Date(u.created_at).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 text-right">
-                      {u.role !== 'admin' && (
-                        <div className="flex justify-end gap-1">
-                          <button onClick={() => setWarningUserId(u.id)} className="p-2 text-slate-300 hover:text-amber-500"><AlertTriangle className="h-4 w-4" /></button>
-                          <button onClick={() => setUserToDelete(u.id)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
-                        </div>
+          <div className="bg-white dark:bg-slate-900 md:rounded-2xl md:border border-y border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+            {(Array.isArray(users) ? users : []).map((u) => (
+              <div key={u.id} className="flex items-center justify-between p-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-10 w-10 bg-slate-900 dark:bg-white rounded-full flex items-center justify-center text-white dark:text-slate-900 text-sm font-black shrink-0">
+                    {u.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{u.name}</p>
+                      {u.role === 'admin' && (
+                        <span className="shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded uppercase bg-slate-900 dark:bg-white text-white dark:text-slate-900">Admin</span>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 truncate uppercase tracking-widest">{u.email}</p>
+                  </div>
+                </div>
+                {u.role !== 'admin' && (
+                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                    <button onClick={() => setWarningUserId(u.id)} className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                      <AlertTriangle className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => setUserToDelete(u.id)} className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-500 hover:text-red-700 transition-colors">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
 
+        {/* REPORTS LIST (Replaced Table) */}
         {activeTab === 'reports' && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                  <th className="px-6 py-4">Reported</th>
-                  <th className="px-6 py-4">Reason</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Operations</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {(Array.isArray(reports) ? reports : []).map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                    <td className="px-6 py-4 text-sm font-bold text-slate-900 dark:text-slate-50">{r.reported_name}</td>
-                    <td className="px-6 py-4 text-xs font-medium text-slate-500">{r.reason}</td>
-                    <td className="px-6 py-4">
-                      <span className={`text-[9px] font-black px-2 py-1 rounded-md uppercase ${r.status === 'pending' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      {r.status === 'pending' && (
-                        <div className="flex items-center justify-end gap-4">
-                          <button 
-                            onClick={() => setWarningUserId(r.reported_id)} 
-                            className="text-[10px] font-black uppercase tracking-widest text-amber-600 hover:text-amber-500 transition-colors"
-                          >
-                            Issue Warning
-                          </button>
-                          <button 
-                            onClick={() => resolveReport(r.id)} 
-                            className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-500 transition-colors"
-                          >
-                            Mark Resolved
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="bg-white dark:bg-slate-900 md:rounded-2xl md:border border-y border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+            {(Array.isArray(reports) ? reports : []).map((r) => (
+              <div key={r.id} className="p-4 flex flex-col gap-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Reported User</span>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{r.reported_name}</h4>
+                  </div>
+                  <span className={`text-[8px] font-black px-2 py-1 rounded uppercase tracking-widest ${r.status === 'pending' ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                    {r.status}
+                  </span>
+                </div>
+                
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <p className="text-sm text-slate-600 dark:text-slate-300">{r.reason}</p>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-2">
+                    Reported by: {r.reporter_name}
+                  </p>
+                </div>
+
+                {r.status === 'pending' && (
+                  <div className="flex gap-2 mt-1">
+                    <button onClick={() => setWarningUserId(r.reported_id)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                      Issue Warning
+                    </button>
+                    <button onClick={() => resolveReport(r.id)} className="flex-1 py-3 bg-slate-900 dark:bg-white rounded-xl text-[10px] font-black uppercase tracking-widest text-white dark:text-slate-900 flex justify-center items-center gap-1">
+                      <CheckCircle className="h-3 w-3" /> Resolve
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+            {reports.length === 0 && (
+              <div className="p-8 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                No reports found
+              </div>
+            )}
           </div>
         )}
 
+        {/* ERRORS LIST */}
         {activeTab === 'errors' && (
-          <div className="p-6 space-y-4 max-h-[600px] overflow-y-auto">
+          <div className="p-4 md:p-0 space-y-3">
             {(Array.isArray(stats?.recentErrors) ? stats.recentErrors : []).map((err, i) => (
-              <div key={i} className="p-4 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/20">
-                <div className="flex justify-between mb-2">
-                  <span className="text-[9px] font-black uppercase text-red-600">Incident Report</span>
+              <div key={i} className="bg-red-50 dark:bg-red-900/10 p-4 rounded-2xl border border-red-100 dark:border-red-900/20">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 flex items-center gap-1">
+                    <Activity className="h-3 w-3" /> Incident
+                  </span>
                   <span className="text-[9px] font-bold text-slate-400">{new Date(err.timestamp).toLocaleTimeString()}</span>
                 </div>
-                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{err.message}</p>
-                {err.path && <p className="text-[10px] font-mono text-red-400 mt-1">{err.path}</p>}
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1">{err.message}</p>
+                {err.path && <p className="text-[10px] font-mono text-red-500 break-all">{err.path}</p>}
               </div>
             ))}
             {(!stats?.recentErrors || stats.recentErrors.length === 0) && (
-              <div className="py-10 text-center">
-                <Activity className="h-10 w-10 text-green-500 mx-auto mb-3 opacity-20" />
-                <p className="text-xs font-black uppercase text-slate-400">All Systems Nominal</p>
+              <div className="py-20 text-center">
+                <Activity className="h-12 w-12 text-slate-200 dark:text-slate-800 mx-auto mb-4" />
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">All Systems Nominal</p>
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* WARNING MODAL */}
+      {/* WARNING MODAL (Native Bottom-Sheet/Center Feel) */}
       {warningUserId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-md p-8 rounded-[2.5rem] shadow-2xl border border-slate-100 dark:border-slate-800">
-            <h2 className="text-xl font-black mb-2 text-slate-900 dark:text-slate-50">Issue Warning</h2>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">User Violation Protocol</p>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 w-full md:max-w-md p-6 rounded-t-3xl md:rounded-3xl shadow-2xl border-t md:border border-slate-100 dark:border-slate-800 animate-in slide-in-from-bottom-4 md:slide-in-from-bottom-0 md:zoom-in-95 duration-200">
+            <h2 className="text-xl font-black text-slate-900 dark:text-white mb-1">Issue Warning</h2>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6">User Violation Protocol</p>
+            
             <textarea
-              className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-4 text-sm font-bold text-slate-900 dark:text-slate-50 focus:ring-2 focus:ring-indigo-500 min-h-[120px] mb-6"
-              placeholder="Detail the violation..."
+              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-4 text-sm font-medium text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white min-h-[120px] mb-6 placeholder:text-slate-400"
+              placeholder="Detail the terms of service violation..."
               value={warningMessage}
               onChange={(e) => setWarningMessage(e.target.value)}
             />
+            
             <div className="flex gap-3">
-              <button onClick={() => setWarningUserId(null)} className="flex-1 py-4 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors">Cancel</button>
+              <button 
+                onClick={() => setWarningUserId(null)} 
+                className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                Cancel
+              </button>
               <button 
                 onClick={sendWarning} 
                 disabled={sendingWarning || !warningMessage.trim()}
-                className="flex-1 bg-amber-600 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-amber-100 dark:shadow-none"
+                className="flex-1 bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 transition-colors"
               >
-                {sendingWarning ? 'Sending...' : 'Confirm Warning'}
+                {sendingWarning ? 'Sending...' : 'Send Warning'}
               </button>
             </div>
           </div>
@@ -323,7 +332,7 @@ const Admin: React.FC = () => {
         onClose={() => setUserToDelete(null)}
         onConfirm={deleteUser}
         title="Delete User"
-        message="Permanently remove this identity and all associated assets?"
+        message="Permanently remove this identity and all associated assets? This action is irreversible."
         confirmText="Confirm Deletion"
         type="danger"
       />

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { useAccessibility } from '../context/AccessibilityContext';
-import { User, Mail, Calendar, Package, Trash2, ExternalLink, ShoppingBag, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Package, Trash2, ShoppingBag, LogOut, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -11,6 +11,8 @@ interface UserListing {
   title: string;
   price: number;
   status: string;
+  image_url: string;
+  category: string;
   created_at: string;
 }
 
@@ -31,12 +33,13 @@ interface Warning {
 }
 
 const Profile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { announce } = useAccessibility();
   const [listings, setListings] = useState<UserListing[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'listings' | 'purchases'>('listings');
   const [listingToDelete, setListingToDelete] = useState<number | null>(null);
   const [listingToMarkSold, setListingToMarkSold] = useState<number | null>(null);
 
@@ -50,10 +53,14 @@ const Profile: React.FC = () => {
         ]);
         
         const userListings = Array.isArray(listingsRes.data) ? listingsRes.data : [];
+        const userTransactions = Array.isArray(transactionsRes.data) ? transactionsRes.data : [];
+        const userWarnings = Array.isArray(warningsRes.data) ? warningsRes.data : [];
+        
         setListings(userListings);
-        setTransactions(Array.isArray(transactionsRes.data) ? transactionsRes.data : []);
-        setWarnings(Array.isArray(warningsRes.data) ? warningsRes.data : []);
-        announce(`Profile loaded. You have ${userListings.length} listings, ${transactionsRes.data.length} purchases, and ${warningsRes.data.length} warnings.`);
+        setTransactions(userTransactions);
+        setWarnings(userWarnings);
+        
+        announce(`Profile loaded. You have ${userListings.length} listings, ${userTransactions.length} purchases, and ${userWarnings.length} warnings.`);
       } catch (error) {
         console.error('Error fetching profile data:', error);
         announce('Failed to load profile data.', 'assertive');
@@ -62,7 +69,7 @@ const Profile: React.FC = () => {
       }
     };
     if (user) fetchData();
-  }, [user]);
+  }, [user, announce]);
 
   const handleDelete = async () => {
     if (!listingToDelete) return;
@@ -71,7 +78,6 @@ const Profile: React.FC = () => {
       setListings(listings.filter(l => l.id !== listingToDelete));
       announce('Listing deleted successfully.');
     } catch (error) {
-      console.error('Error deleting listing:', error);
       announce('Failed to delete listing.', 'assertive');
     } finally {
       setListingToDelete(null);
@@ -87,7 +93,6 @@ const Profile: React.FC = () => {
       setListings(listings.map(l => l.id === listingToMarkSold ? { ...l, status: 'sold' } : l));
       announce('Listing marked as sold.');
     } catch (error) {
-      console.error('Error marking as sold:', error);
       announce('Failed to update listing.', 'assertive');
     } finally {
       setListingToMarkSold(null);
@@ -95,209 +100,124 @@ const Profile: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* User Info Card */}
-        <aside className="lg:col-span-1" aria-label="User Profile Information">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 p-8 sticky top-24 transition-colors duration-200">
-            <div className="text-center mb-8">
-              <div className="h-24 w-24 bg-indigo-600 dark:bg-indigo-500 rounded-full flex items-center justify-center mx-auto mb-4 text-white text-3xl font-bold">
-                {user!.name.charAt(0)}
-              </div>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-50">{user!.name}</h2>
-              <p className="text-indigo-600 dark:text-indigo-400 font-medium capitalize">{user!.role}</p>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400">
-                <Mail className="h-5 w-5 text-slate-400" aria-hidden="true" />
-                <span className="text-sm">{user!.email}</span>
-              </div>
-              <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400">
-                <Calendar className="h-5 w-5 text-slate-400" aria-hidden="true" />
-                <span className="text-sm">Joined CampusMarket</span>
-              </div>
-            </div>
-
-            <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-slate-500 dark:text-slate-400 text-sm">Active Listings</span>
-                <span className="font-bold text-slate-900 dark:text-slate-50">{listings.length}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-slate-500 dark:text-slate-400 text-sm">Total Purchases</span>
-                <span className="font-bold text-slate-900 dark:text-slate-50">{transactions.length}</span>
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        {/* Content Section */}
-        <main className="lg:col-span-2 space-y-12">
-          {/* Warnings Section (if any) */}
-          {warnings.length > 0 && (
-            <section aria-labelledby="warnings-heading" className="animate-in fade-in slide-in-from-top-4 duration-500">
-              <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 rounded-3xl p-6">
-                <h3 id="warnings-heading" className="text-xl font-bold text-amber-800 dark:text-amber-400 mb-4 flex items-center gap-2">
-                  <AlertTriangle className="h-6 w-6" aria-hidden="true" />
-                  Account Warnings
-                </h3>
-                <div className="space-y-3">
-                  {warnings.map((warning, idx) => (
-                    <div key={`warning-${warning.id}-${idx}`} className="bg-white/50 dark:bg-slate-900/50 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/20">
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-wider">From Admin: {warning.admin_name}</span>
-                        <span className="text-[10px] text-amber-400 dark:text-amber-600">{new Date(warning.created_at).toLocaleDateString()}</span>
-                      </div>
-                      <p className="text-sm text-amber-900 dark:text-amber-100">{warning.message}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Listings Section */}
-          <section aria-labelledby="listings-heading">
-            <h3 id="listings-heading" className="text-2xl font-bold text-slate-900 dark:text-slate-50 mb-6 flex items-center gap-2">
-              <Package className="h-6 w-6 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
-              Your Listings
-            </h3>
-
-            {loading ? (
-              <div className="space-y-4" role="status">
-                {[...Array(2)].map((_, i) => (
-                  <div key={i} className="h-24 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-2xl"></div>
-                ))}
-                <span className="sr-only">Loading listings...</span>
-              </div>
-            ) : listings.length > 0 ? (
-              <div className="space-y-4">
-                {listings.map((listing, idx) => (
-                  <div key={`listing-${listing.id}-${idx}`} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center justify-between group transition-colors duration-200">
-                    <div>
-                      <h4 className="font-bold text-slate-900 dark:text-slate-50 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{listing.title}</h4>
-                      <div className="flex items-center gap-4 mt-1">
-                        <span className="text-indigo-600 dark:text-indigo-400 font-bold">${listing.price}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold uppercase ${
-                          listing.status === 'available' ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                        }`}>
-                          {listing.status}
-                        </span>
-                        {listing.sold_count > 0 && (
-                          <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                            {listing.sold_count} sold
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {listing.status === 'available' && (
-                        <button
-                          onClick={() => setListingToMarkSold(listing.id)}
-                          className="p-2 text-slate-400 hover:text-green-600 dark:hover:text-green-400 transition-colors"
-                          aria-label={`Mark ${listing.title} as Sold`}
-                        >
-                          <CheckCircle className="h-5 w-5" aria-hidden="true" />
-                        </button>
-                      )}
-                      <Link 
-                        to={`/listing/${listing.id}`} 
-                        className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                        aria-label={`View details for ${listing.title}`}
-                      >
-                        <ExternalLink className="h-5 w-5" aria-hidden="true" />
-                      </Link>
-                      <button 
-                        onClick={() => setListingToDelete(listing.id)} 
-                        className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                        aria-label={`Delete listing ${listing.title}`}
-                      >
-                        <Trash2 className="h-5 w-5" aria-hidden="true" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
-                <Package className="h-12 w-12 text-slate-200 dark:text-slate-700 mx-auto mb-4" aria-hidden="true" />
-                <h4 className="text-lg font-medium text-slate-900 dark:text-slate-50">You haven't listed anything yet</h4>
-                <Link to="/create-listing" className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline mt-2 inline-block">
-                  Create your first listing
-                </Link>
-              </div>
-            )}
-          </section>
-
-          {/* Purchase History Section */}
-          <section aria-labelledby="purchases-heading">
-            <h3 id="purchases-heading" className="text-2xl font-bold text-slate-900 dark:text-slate-50 mb-6 flex items-center gap-2">
-              <ShoppingBag className="h-6 w-6 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
-              Purchase History
-            </h3>
-
-            {loading ? (
-              <div className="space-y-4" role="status">
-                {[...Array(2)].map((_, i) => (
-                  <div key={i} className="h-24 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-2xl"></div>
-                ))}
-                <span className="sr-only">Loading purchase history...</span>
-              </div>
-            ) : transactions.length > 0 ? (
-              <div className="space-y-4">
-                {transactions.map((tx, idx) => (
-                  <div key={`tx-${tx.id}-${idx}`} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-center gap-4 transition-colors duration-200">
-                    <div className="h-16 w-16 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-800 flex-shrink-0">
-                      <img src={tx.image_url || 'https://picsum.photos/seed/tx/200/200'} alt={`Image of ${tx.title}`} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                    </div>
-                    <div className="flex-grow">
-                      <h4 className="font-bold text-slate-900 dark:text-slate-50">{tx.title}</h4>
-                      <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mt-1">
-                       <span className="font-bold text-indigo-600 dark:text-indigo-400">${Number(tx.amount).toFixed(2)}</span>
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" aria-hidden="true" />
-                          <span>{new Date(tx.created_at).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold uppercase">
-                      Completed
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
-                <ShoppingBag className="h-12 w-12 text-slate-200 dark:text-slate-700 mx-auto mb-4" aria-hidden="true" />
-                <h4 className="text-lg font-medium text-slate-900 dark:text-slate-50">No purchases yet</h4>
-                <Link to="/" className="text-indigo-600 dark:text-indigo-400 font-bold hover:underline mt-2 inline-block">
-                  Browse marketplace
-                </Link>
-              </div>
-            )}
-          </section>
-        </main>
+    <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 pt-12 pb-6 px-4 text-center">
+        <div className="h-20 w-20 bg-slate-900 dark:bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-white dark:text-slate-900 text-3xl font-black">
+          {user!.name.charAt(0).toUpperCase()}
+        </div>
+        <h1 className="text-2xl font-black text-slate-900 dark:text-white mb-1">{user!.name}</h1>
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6">{user!.email}</p>
+        
+        <button onClick={logout} className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">
+          <LogOut className="h-4 w-4" /> Sign Out
+        </button>
       </div>
 
-      <ConfirmationModal
-        isOpen={listingToDelete !== null}
-        onClose={() => setListingToDelete(null)}
-        onConfirm={handleDelete}
-        title="Delete Listing"
-        message="Are you sure you want to delete this listing? This action cannot be undone."
-        confirmText="Delete"
-        type="danger"
-      />
+      {warnings.length > 0 && (
+        <div className="bg-red-50 dark:bg-red-950/30 border-b border-red-100 dark:border-red-900/50 p-4">
+          <div className="max-w-7xl mx-auto flex flex-col gap-3">
+            <h3 className="text-sm font-black text-red-700 dark:text-red-400 flex items-center gap-2 uppercase tracking-widest">
+              <AlertTriangle className="h-4 w-4" />
+              Account Warnings
+            </h3>
+            {warnings.map((warning, idx) => (
+              <div key={idx} className="bg-white/60 dark:bg-slate-900/60 p-3 rounded-lg border border-red-100 dark:border-red-900/30">
+                <p className="text-sm text-red-900 dark:text-red-200">{warning.message}</p>
+                <div className="flex justify-between mt-2">
+                  <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">From: {warning.admin_name}</span>
+                  <span className="text-[10px] font-bold text-red-400">{new Date(warning.created_at).toLocaleDateString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-      <ConfirmationModal
-        isOpen={listingToMarkSold !== null}
-        onClose={() => setListingToMarkSold(null)}
-        onConfirm={handleMarkAsSold}
-        title="Mark as Sold"
-        message="Are you sure you want to mark this item as sold? It will no longer be available for purchase."
-        confirmText="Mark as Sold"
-      />
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex justify-center">
+        <button 
+          onClick={() => setActiveTab('listings')}
+          className={`flex-1 max-w-[200px] py-4 text-xs font-black uppercase tracking-widest border-b-2 transition-colors ${activeTab === 'listings' ? 'border-slate-900 text-slate-900 dark:border-white dark:text-white' : 'border-transparent text-slate-400'}`}
+        >
+          My Listings
+        </button>
+        <button 
+          onClick={() => setActiveTab('purchases')}
+          className={`flex-1 max-w-[200px] py-4 text-xs font-black uppercase tracking-widest border-b-2 transition-colors ${activeTab === 'purchases' ? 'border-slate-900 text-slate-900 dark:border-white dark:text-white' : 'border-transparent text-slate-400'}`}
+        >
+          Purchases
+        </button>
+      </div>
+
+      <div className="flex-1 max-w-7xl mx-auto w-full px-2 md:px-8 py-6">
+        {activeTab === 'listings' && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
+            {listings.map(listing => (
+              <div key={listing.id} className="flex flex-col bg-white dark:bg-slate-900 rounded-lg overflow-hidden border border-slate-100 dark:border-slate-800/50 shadow-sm">
+                <Link to={`/listing/${listing.id}`} className="relative aspect-[4/5] bg-slate-100 dark:bg-slate-800">
+                  <img src={listing.image_url || '/placeholder.png'} alt={listing.title} className="w-full h-full object-cover" />
+                  <div className="absolute top-1 left-1 flex gap-1">
+                    <div className="bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-black uppercase text-white tracking-widest">
+                      {listing.category}
+                    </div>
+                    {listing.status === 'sold' && (
+                      <div className="bg-slate-900 px-1.5 py-0.5 rounded text-[8px] font-black uppercase text-white tracking-widest">
+                        Sold
+                      </div>
+                    )}
+                  </div>
+                </Link>
+                <div className="p-2 md:p-3 flex flex-col flex-1">
+                  <Link to={`/listing/${listing.id}`}>
+                    <h3 className="font-medium text-[11px] md:text-sm text-slate-900 dark:text-slate-100 line-clamp-2 leading-tight">
+                      {listing.title}
+                    </h3>
+                  </Link>
+                  <div className="mt-auto pt-2 flex items-center justify-between">
+                    <span className="text-sm md:text-base font-black text-slate-900 dark:text-white">GH₵{Number(listing.price).toLocaleString()}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 border-t border-slate-100 dark:border-slate-800">
+                  <button onClick={() => setListingToMarkSold(listing.id)} disabled={listing.status === 'sold'} className="py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 border-r border-slate-100 dark:border-slate-800">
+                    Sold
+                  </button>
+                  <button onClick={() => setListingToDelete(listing.id)} className="py-2 text-[10px] font-black uppercase tracking-widest text-red-500 hover:text-red-700">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'purchases' && (
+          <div className="max-w-3xl mx-auto bg-white dark:bg-slate-900 rounded-xl md:border border-slate-100 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
+            {transactions.map(tx => (
+              <div key={tx.id} className="flex gap-4 p-4 items-center">
+                <div className="w-16 h-16 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
+                  <img src={tx.image_url || '/placeholder.png'} alt={tx.title} className="w-full h-full object-cover" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate">{tx.title}</h4>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">
+                    {new Date(tx.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-black text-slate-900 dark:text-white">GH₵{Number(tx.amount).toLocaleString()}</p>
+                </div>
+              </div>
+            ))}
+            {transactions.length === 0 && (
+              <div className="p-8 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                No purchases yet
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <ConfirmationModal isOpen={listingToDelete !== null} onClose={() => setListingToDelete(null)} onConfirm={handleDelete} title="Delete Listing" message="Are you sure? This cannot be undone." confirmText="Delete" type="danger" />
+      <ConfirmationModal isOpen={listingToMarkSold !== null} onClose={() => setListingToMarkSold(null)} onConfirm={handleMarkAsSold} title="Mark as Sold" message="Item will be marked as sold." confirmText="Confirm" />
     </div>
   );
 };
