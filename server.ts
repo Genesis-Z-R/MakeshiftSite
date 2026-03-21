@@ -32,9 +32,17 @@ async function startServer() {
   const app = express();
   const httpServer = createServer(app);
   
+  // Define your trusted frontend URLs here
+  const allowedOrigins = [
+    "https://campusmarket1.store",
+    "https://makeshift-site.vercel.app",
+    "http://localhost:5173",
+    /\.vercel\.app$/ // Keeps support for Vercel branch previews
+  ];
+
   const io = new Server(httpServer, {
     cors: {
-      origin: ["https://makeshift-site.vercel.app", "http://localhost:5173", /\.vercel\.app$/],
+      origin: allowedOrigins,
       methods: ["GET", "POST"],
       credentials: true
     },
@@ -82,7 +90,7 @@ async function startServer() {
   });
 
   app.use(cors({
-    origin: ["https://makeshift-site.vercel.app", "http://localhost:5173", /\.vercel\.app$/],
+    origin: allowedOrigins,
     credentials: true
   }));
   app.use(express.json());
