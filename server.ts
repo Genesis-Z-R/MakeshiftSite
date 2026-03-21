@@ -32,9 +32,11 @@ async function startServer() {
   const app = express();
   const httpServer = createServer(app);
   
-  // Define your trusted frontend URLs here
+  
+ // Define your trusted frontend URLs here
   const allowedOrigins = [
     "https://campusmarket1.store",
+    "https://www.campusmarket1.store",
     "https://makeshift-site.vercel.app",
     "http://localhost:5173",
     /\.vercel\.app$/ // Keeps support for Vercel branch previews
