@@ -60,22 +60,34 @@ const Admin: React.FC = () => {
   }, [user, navigate]);
 
   const fetchData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
+      // FIX: Added .catch() to EACH individual promise! 
+      // Now if stats fail, users and reports will still load perfectly.
       const [usersRes, statsRes, reportsRes] = await Promise.all([
-        api.get('/admin/users'),
-        api.get('/admin/stats'),
-        api.get('/admin/reports')
+        api.get('/admin/users').catch((err) => {
+          console.error("Users fetch failed", err);
+          return { data: [] };
+        }),
+        api.get('/admin/stats').catch((err) => {
+          console.error("Stats fetch failed", err);
+          return { data: null };
+        }),
+        api.get('/admin/reports').catch((err) => {
+          console.error("Reports fetch failed", err);
+          return { data: [] };
+        })
       ]);
+
       setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
       setStats(statsRes.data || null);
       setReports(Array.isArray(reportsRes.data) ? reportsRes.data : []);
       announce('Admin dashboard loaded.');
     } catch (error) {
-      console.error('Error fetching admin data:', error);
+      console.error('Fatal error fetching admin data:', error);
       setUsers([]);
       setReports([]);
-      announce('Failed to load some dashboard data.', 'assertive');
+      announce('Failed to load dashboard data.', 'assertive');
     } finally {
       setLoading(false);
     }
@@ -85,6 +97,7 @@ const Admin: React.FC = () => {
     if (user && user.role === 'admin') {
       fetchData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const resolveReport = async (reportId: number) => {
@@ -172,7 +185,6 @@ const Admin: React.FC = () => {
                 {s.sub && <span className="text-[8px] font-black text-green-500 uppercase">{s.sub}</span>}
               </div>
               <div>
-                {/* Fallback to 0 if the value is missing */}
                 <h3 className={`text-xl font-black leading-none mb-1 ${s.danger ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>{s.val ?? 0}</h3>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
               </div>
@@ -209,7 +221,6 @@ const Admin: React.FC = () => {
                 <div key={u.id} className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="h-10 w-10 bg-slate-900 dark:bg-white rounded-full flex items-center justify-center text-white dark:text-slate-900 text-sm font-black shrink-0">
-                      {/* CRASH FIX: Safe fallback if name is empty */}
                       {(u.name || 'U').charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0">

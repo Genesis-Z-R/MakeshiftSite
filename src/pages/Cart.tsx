@@ -30,13 +30,22 @@ const Cart: React.FC = () => {
     }
   };
 
-  const handleRemoveItem = (id: number) => {
+  const handleRemoveItem = async (id: number) => {
     if (!Array.isArray(cart)) return;
-    const item = cart.find(i => i.id === id);
-    removeFromCart(id);
-    setItemToRemove(null);
-    if (item) {
-      announce(`${item.title} removed from cart.`);
+    
+    // Find item for the screen reader announcement
+    const item = cart.find(i => (i as any).cart_item_id === id || i.id === id);
+    
+    try {
+      // Await the backend deletion so the UI doesn't close too early
+      await removeFromCart(id);
+      if (item) {
+        announce(`${item.title} removed from cart.`);
+      }
+    } catch (error) {
+      console.error("Failed to delete cart item", error);
+    } finally {
+      setItemToRemove(null);
     }
   };
 
@@ -95,7 +104,8 @@ const Cart: React.FC = () => {
                     {item.title}
                   </h3>
                   <button
-                    onClick={() => setItemToRemove(item.id)}
+                    // FIX: We now explicitly grab the cart_item_id from the backend join
+                    onClick={() => setItemToRemove((item as any).cart_item_id || item.id)}
                     className="p-1.5 -mt-1.5 -mr-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
                   >
                     <Trash2 className="h-5 w-5" />
