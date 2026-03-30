@@ -34,7 +34,6 @@ const Home: React.FC = () => {
 
   const observer = useRef<IntersectionObserver | null>(null);
 
-  // Corrected category names to match the database exactly
   const categoryItems = [
     { name: 'Electronics', icon: <Smartphone className="h-4 w-4" /> },
     { name: 'Fashion', icon: <Shirt className="h-4 w-4" /> },
@@ -48,23 +47,30 @@ const Home: React.FC = () => {
     { name: 'Other', icon: <MoreHorizontal className="h-4 w-4" /> },
   ];
 
-  const fetchListings = async (reset = false) => {
+  // CLEANED UP FETCH LOGIC: Guaranteed to reset offset accurately
+  const fetchListings = async (isReset = false) => {
     try {
-      if (reset) {
-        setLoading(true);
-        setOffset(0);
-      } else {
-        setLoadingMore(true);
-      }
-      const currentOffset = reset ? 0 : offset;
+      const currentOffset = isReset ? 0 : offset;
+      
+      if (isReset) setLoading(true);
+      else setLoadingMore(true);
+
       const response = await api.get('/listings', {
         params: { search, category, limit: LIMIT, offset: currentOffset }
       });
-      const newListings = response.data;
-      if (reset) setListings(newListings);
-      else setListings(prev => [...prev, ...newListings]);
-      setHasMore(newListings.length === LIMIT);
-      if (!reset) setOffset(prev => prev + LIMIT);
+      
+      const data = response.data;
+
+      if (isReset) {
+        setListings(data);
+      } else {
+        // Simple append, no complex filtering needed if offset is correct
+        setListings(prev => [...prev, ...data]);
+      }
+      
+      setOffset(currentOffset + LIMIT);
+      setHasMore(data.length === LIMIT);
+      
     } catch (error) {
       console.error('Error fetching listings:', error);
     } finally {
@@ -73,21 +79,35 @@ const Home: React.FC = () => {
     }
   };
 
+  // Trigger fetch exactly when category or search changes
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
+    // If user is typing, wait 500ms. If clicking a tab, load instantly.
+    const delay = search ? 500 : 0; 
+    
+    // Clear old data instantly so the UI doesn't show ghost items
+    if (delay === 0) setListings([]); 
+    
+    const timer = setTimeout(() => {
       fetchListings(true);
-    }, 500);
-    return () => clearTimeout(delayDebounceFn);
+    }, delay);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, category]);
 
+  // Infinite Scroll Observer
   const lastElementRef = useCallback((node: HTMLDivElement) => {
     if (loading || loadingMore) return;
     if (observer.current) observer.current.disconnect();
+    
     observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) fetchListings(false);
+      if (entries[0].isIntersecting && hasMore) {
+        fetchListings(false);
+      }
     });
+    
     if (node) observer.current.observe(node);
-  }, [loading, loadingMore, hasMore]);
+  }, [loading, loadingMore, hasMore, offset]); // Tracks offset to prevent infinite loops
 
   const handleCategorySelect = (catName: string) => {
     const newCategory = category === catName ? 'All' : catName;
@@ -99,9 +119,7 @@ const Home: React.FC = () => {
   return (
     <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
       
-      {/* STICKY HEADER CONTAINER */}
       <div className="sticky top-0 z-40 bg-white dark:bg-slate-900 shadow-sm">
-        {/* Search Bar */}
         <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
           <div className="relative max-w-7xl mx-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -115,7 +133,6 @@ const Home: React.FC = () => {
           </div>
         </div>
 
-        {/* Horizontal Categories - Now also sticky! */}
         <div className="overflow-x-auto no-scrollbar py-2 px-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex gap-2 max-w-7xl mx-auto">
             <button
@@ -146,18 +163,17 @@ const Home: React.FC = () => {
       </div>
 
       <div className="max-w-7xl mx-auto w-full px-2 md:px-8 py-4">
-        {loading && offset === 0 ? (
+        {loading ? (
           <div className="flex justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
           </div>
         ) : (
-          /* SLIMMER GRID: 2 columns on mobile, 4 on desktop */
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
             {listings.map((listing, index) => {
               const isLastElement = index === listings.length - 1;
               return (
                 <div 
-                  key={listing.id} 
+                  key={`listing-${listing.id}-${index}`} 
                   ref={isLastElement ? lastElementRef : null}
                   className="flex flex-col bg-white dark:bg-slate-900 rounded-lg overflow-hidden border border-slate-100 dark:border-slate-800/50 shadow-sm"
                 >
@@ -179,7 +195,6 @@ const Home: React.FC = () => {
                       </h3>
                     </Link>
                     
-                    {/* RESTORED: Clickable Seller Storefront Link */}
                     <Link 
                       to={`/seller/${listing.seller_id}`}
                       className="text-[9px] text-slate-400 mt-1 hover:text-indigo-400 transition-colors flex items-center gap-1"
@@ -202,7 +217,13 @@ const Home: React.FC = () => {
           </div>
         )}
         
-        {!hasMore && listings.length > 0 && (
+        {loadingMore && (
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+          </div>
+        )}
+        
+        {!hasMore && listings.length > 0 && !loading && (
           <div className="text-center py-12 pb-32 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
             End of Results
           </div>
