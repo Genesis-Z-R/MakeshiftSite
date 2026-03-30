@@ -34,16 +34,17 @@ const Home: React.FC = () => {
 
   const observer = useRef<IntersectionObserver | null>(null);
 
+  // Corrected category names to match the database exactly
   const categoryItems = [
     { name: 'Electronics', icon: <Smartphone className="h-4 w-4" /> },
     { name: 'Fashion', icon: <Shirt className="h-4 w-4" /> },
-    { name: 'Home', icon: <HomeIcon className="h-4 w-4" /> },
-    { name: 'Books', icon: <BookOpen className="h-4 w-4" /> },
-    { name: 'Health', icon: <HeartPulse className="h-4 w-4" /> },
-    { name: 'Food', icon: <Utensils className="h-4 w-4" /> },
+    { name: 'Home & Living', icon: <HomeIcon className="h-4 w-4" /> },
+    { name: 'Books & Stationery', icon: <BookOpen className="h-4 w-4" /> },
+    { name: 'Health & Beauty', icon: <HeartPulse className="h-4 w-4" /> },
+    { name: 'Food & Groceries', icon: <Utensils className="h-4 w-4" /> },
     { name: 'Services', icon: <SettingsIcon className="h-4 w-4" /> },
-    { name: 'Sports', icon: <Trophy className="h-4 w-4" /> },
-    { name: 'Vehicles', icon: <Car className="h-4 w-4" /> },
+    { name: 'Sports & Fitness', icon: <Trophy className="h-4 w-4" /> },
+    { name: 'Vehicles & Transport', icon: <Car className="h-4 w-4" /> },
     { name: 'Other', icon: <MoreHorizontal className="h-4 w-4" /> },
   ];
 
